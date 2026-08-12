@@ -18,8 +18,11 @@
 
   .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--border);flex:0 0 auto;}
   .toolbar label{font-size:13px;color:var(--navy);font-weight:600;}
-  .toolbar input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;width:180px;background:#fff;}
-  .toolbar input:focus{outline:2px solid #c7d4f2;outline-offset:0;border-color:var(--blue);}
+  .toolbar select,.toolbar input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;max-width:560px;background:#fff;}
+  .toolbar select:focus,.toolbar input:focus{outline:2px solid #c7d4f2;outline-offset:0;border-color:var(--blue);}
+  .toolbar input{flex:1 1 340px;min-width:240px;}
+  .toolbar .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;width:100%;}
+  .toolbar .sep{width:100%;border-top:1px dashed var(--border);}
   button{font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--blue);cursor:pointer;}
   button:hover:not(:disabled){background:#eef2fb;}
   button.primary{background:var(--navy);border-color:var(--navy);color:#fff;}
@@ -53,27 +56,39 @@
 <body>
 <header>
   <h1>detikGlobal — Preview &amp; Generate</h1>
-  <p>Enter a detik article ID to preview the Indonesian source, then generate the English rewrite side by side.</p>
+  <p>Pick an article from the curated dataset, or paste a detik.com article URL to scrape it. Preview the Indonesian source, then generate the English rewrite side by side.</p>
 </header>
 
 <div class="toolbar">
-  <label for="articleId">Article ID</label>
-  <input id="articleId" type="text" inputmode="numeric" placeholder="e.g. 8606706" autocomplete="off">
-  <button id="previewBtn" class="primary" type="button">Preview input</button>
-  <button id="generateBtn" type="button" disabled>Generate output</button>
-  <span id="status" class="status"></span>
+  <div class="row">
+    <label for="articleId">Dataset</label>
+    <select id="articleId" disabled><option value="">Loading articles…</option></select>
+    <button id="previewBtn" class="primary" type="button" disabled>Preview input</button>
+  </div>
+  <div class="sep"></div>
+  <div class="row">
+    <label for="articleUrl">detik.com URL</label>
+    <input id="articleUrl" type="url" placeholder="https://finance.detik.com/…/d-8615053/…" autocomplete="off" spellcheck="false">
+    <button id="scrapeBtn" class="primary" type="button">Scrape &amp; preview</button>
+  </div>
+  <div class="sep"></div>
+  <div class="row">
+    <button id="generateBtn" type="button" disabled>Generate output</button>
+    <span id="status" class="status"></span>
+  </div>
 </div>
 
 <main>
   <div class="cols">
-    <div id="origCol" class="col placeholder">Enter an article ID and click &ldquo;Preview input&rdquo;.</div>
+    <div id="origCol" class="col placeholder">Choose an article and click &ldquo;Preview input&rdquo;.</div>
     <div id="genCol" class="col placeholder">Generated English output will appear here.</div>
   </div>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const idInput = $("articleId"), previewBtn = $("previewBtn"), generateBtn = $("generateBtn");
+const idSelect = $("articleId"), previewBtn = $("previewBtn"), generateBtn = $("generateBtn");
+const urlInput = $("articleUrl"), scrapeBtn = $("scrapeBtn");
 const statusEl = $("status"), origCol = $("origCol"), genCol = $("genCol");
 
 let currentArticle = null;
@@ -111,7 +126,7 @@ function renderOriginal(a) {
   const cover = a.image_cover || {};
   origCol.className = "col orig";
   origCol.innerHTML = `
-    <div class="badge badge-orig">Input — Original (ID)</div>
+    <div class="badge badge-orig">Input — Original (ID)${a.source_url ? " · scraped" : ""}</div>
     <h2>${esc(a.title)}</h2>
     <p class="summary">${esc(a.resume)}</p>
     <div class="meta"><b>Category:</b> ${esc(a.categoryauto) || "&mdash;"} &nbsp;|&nbsp; <b>Tags:</b> ${esc(tagList(a.tags || a.tag))}</div>
@@ -146,17 +161,39 @@ async function api(url, options) {
 }
 
 function setBusy(busy) {
-  previewBtn.disabled = busy;
+  previewBtn.disabled = busy || !idSelect.value;
   generateBtn.disabled = busy || !currentArticle;
+  idSelect.disabled = busy;
+  scrapeBtn.disabled = busy;
+  urlInput.disabled = busy;
+}
+
+async function loadArticleList() {
+  try {
+    const { articles } = await api("/api/articles");
+    idSelect.innerHTML = "";
+    for (const a of articles) {
+      const opt = document.createElement("option");
+      opt.value = a.id;
+      opt.textContent = `${a.id} — ${a.title}`;
+      idSelect.append(opt);
+    }
+    idSelect.disabled = false;
+    previewBtn.disabled = !idSelect.value;
+    setStatus(`${articles.length} article(s) available.`, false, false);
+  } catch (e) {
+    idSelect.innerHTML = '<option value="">Could not load articles</option>';
+    setStatus(e.message, true, false);
+  }
 }
 
 async function preview() {
-  const id = idInput.value.trim();
-  if (!/^\d+$/.test(id)) return setStatus("Enter a numeric article ID.", true, false);
+  const id = idSelect.value;
+  if (!id) return setStatus("Choose an article first.", true, false);
 
   currentArticle = null;
   setBusy(true);
-  setStatus(`Fetching article ${id}…`, false, true);
+  setStatus(`Loading article ${id}…`, false, true);
   placeholder(genCol, "Generated English output will appear here.");
 
   try {
@@ -194,10 +231,39 @@ async function generate() {
   }
 }
 
+async function scrape() {
+  const url = urlInput.value.trim();
+  if (!url) return setStatus("Paste a detik.com article URL first.", true, false);
+
+  currentArticle = null;
+  setBusy(true);
+  setStatus("Scraping detik.com…", false, true);
+  placeholder(genCol, "Generated English output will appear here.");
+
+  try {
+    const { article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`);
+    currentArticle = article;
+    renderOriginal(article);
+    setStatus("Scraped. Click “Generate output”.", false, false);
+  } catch (e) {
+    placeholder(origCol, "Could not scrape this URL.");
+    setStatus(e.message, true, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
 previewBtn.addEventListener("click", preview);
+scrapeBtn.addEventListener("click", scrape);
+urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") scrape(); });
 generateBtn.addEventListener("click", generate);
-idInput.addEventListener("keydown", (e) => { if (e.key === "Enter") preview(); });
-idInput.addEventListener("input", () => { currentArticle = null; generateBtn.disabled = true; });
+idSelect.addEventListener("change", () => {
+  currentArticle = null;
+  generateBtn.disabled = true;
+  previewBtn.disabled = !idSelect.value;
+});
+
+loadArticleList();
 </script>
 </body>
 </html>

@@ -4,21 +4,21 @@ import requests
 
 ids = [
     8606706,
-    8610448
-    # 8606363,
-    # 8611160,
-    # 8609660,
-    # 8604738,
-    # 8600003,
-    # 8605519,
-    # 8606892,
-    # 8606869,
-    # 8606982,
-    # 8606407,
-    # 8595990,
+    8610448,
+    8606363,
+    8611160,
+    8609660,
+    8604738,
+    8600003,
+    8605519,
+    8606892,
+    8606869,
+    8606982,
+    8606407,
+    8595990,
 ]
 
-FIELDS = ["title", "content", "resume", "tag", "tags", "keywordauto", "categoryauto"]
+FIELDS = ["id", "title", "content", "resume", "tag", "tags", "keywordauto", "categoryauto"]
 
 
 def extract_article(data):
@@ -46,7 +46,7 @@ def fetch_article(article_id):
 def main():
     articles = [fetch_article(article_id) for article_id in ids]
 
-    with open("detikGlobal/input/apis-data_3.json", "w", encoding="utf-8") as f:
+    with open("input/apis-data-all.json", "w", encoding="utf-8") as f:
         json.dump(articles, f, ensure_ascii=False, indent=2)
 
     print("DONE!")
