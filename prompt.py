@@ -48,13 +48,11 @@ def generate_news_single(news):
     You will be given **exactly one Indonesian news article** plus its metadata. Different fields
     receive different treatment — read this section carefully before producing output.
 
-    ### Track A — Full rewrite: `title`, `summary`, `image_cover_image_text`, `image_cover_alt_image`
-    These four fields are a faithful *rewrite*, not a literal translation: apply EEAT quality
+    ### Track A — Full rewrite: `title`, `subtitle`, `summary`
+    These fields are a faithful *rewrite*, not a literal translation: apply EEAT quality
     principles and localize for an international reader, while preserving every fact they convey.
     For `title` and `summary`, this also means restructuring sentences to fit their length limits
-    (see Output structure below). For `image_cover_image_text` and `image_cover_alt_image`, it means natural,
-    publication-quality English rather than a mechanical translation of the source caption/alt
-    text — but without inventing detail the source caption doesn't contain.
+    (see Output structure below).
 
     - Do not add facts, context, or claims absent from the source.
     - Do not drop material facts present in the source for the sake of brevity — condense
@@ -76,7 +74,10 @@ def generate_news_single(news):
     - Do not drop material facts present in the source for the sake of brevity — you may condense
     wording within a paragraph, but not cut substance.
 
-    ### Track B — Translation only: `tags`, `keywordauto`, `categoryauto`
+    ### Track B — Translation only: `tags`, `keywordauto`, and the cover/story image metadata
+    ### fields: `image_cover_text`, `image_cover_original_title`, `image_cover_original_description`,
+    ### `image_cover_straltfoto`, `image_cover_strjudul`, `image_cover_strdescription`, and their
+    ### `image_story_*` counterparts
     These fields are a **faithful, context-aware translation into English**, not a rewrite:
 
     - Translate each item accurately, using the article's own content as context to resolve
@@ -88,7 +89,11 @@ def generate_news_single(news):
     naming conventions — e.g., "DPR" → "House of Representatives (DPR)" — but only if the
     source term is genuinely ambiguous without it; otherwise a direct translation is enough).
     - Do not apply the EEAT framework, length limits, or restructuring to these fields — they are
-    short, structured metadata, not prose.
+    short, structured metadata, not prose. For the twelve `image_cover_*`/`image_story_*`
+    fields specifically: translate the text as written, preserving its length and level of
+    detail — do not tighten it into punchier prose or expand it with description the source
+    doesn't include, the way Track A would. A credit-style value like "Foto: Ayu" translates
+    to "Photo: Ayu" — translate the label, leave the name as-is.
 
     ## Hard rules (apply to Track A and `content`; Track B follows the same factual-accuracy standard)
 
@@ -122,8 +127,8 @@ def generate_news_single(news):
 
     ## EEAT principles (Track A and `content`)
     Apply Google's EEAT framework (Experience, Expertise, Authoritativeness, Trustworthiness) so
-    `title`, `summary`, `content`, `image_cover_image_text`, and `image_cover_alt_image` read as credible,
-    high-quality journalism rather than a mechanical translation:
+    `title`, `subtitle`, `summary`, and `content` read as credible, high-quality journalism
+    rather than a mechanical translation:
 
     - **Experience** — Retain concrete, first-hand-feeling detail from the source (specific
     locations, dates, direct observations, on-record reactions) rather than flattening the
@@ -163,7 +168,9 @@ def generate_news_single(news):
     text in `alt`/`title`/`caption` attributes and any `<figcaption>`/`<span>` caption text —
     but leave a trailing photo-credit fragment (e.g. `(Name/detikcom)`) exactly as in the source,
     since it's a credit line, not prose. Do not move an image to a different point in the
-    markup, drop it, or add a new one.
+    markup, drop it, or add a new one. (Note: these inline `<img>` tags inside `content` are
+    separate from the standalone `image_cover_*`/`image_story_*` metadata fields, which are
+    translation-only — see Track B above.)
     - **Headings** (`<h2>`, `<h3>`, etc., or bold-as-heading — see below): keep the same tags,
     number, order, and nesting as the source — do not add, remove, merge, or split sections.
     Rewrite the heading text itself with the same natural, idiomatic, AP-style treatment used
@@ -178,6 +185,16 @@ def generate_news_single(news):
     emphasis, not a heading, and should just be rewritten in place like any other text.
     - If the source `content` has no heading tags (real or bold-as-heading), do not invent any —
     keep it as `<p>` paragraphs.
+
+    ## `image_cover_strdescription` / `image_story_strdescription` are also HTML
+    These two fields may contain their own HTML markup (e.g. `<p>tst teste</p>`), separate from
+    `content`. Treat them as Track B translation, HTML-preserved:
+
+    - Keep every tag intact and in place; translate only the text inside the tags.
+    - No restructuring, no forced paragraph rules, no dateline — this is metadata translation,
+    not a rewrite, so it follows the Track B length/fidelity rules above, just applied inside
+    HTML tags instead of plain text.
+    - Same raw-vs-escaped encoding rule as `content`: match whatever form the source uses.
 
     ## Non-article blocks to drop from `content`
     Source HTML often includes navigational or promotional inserts that are not part of the
@@ -197,13 +214,18 @@ def generate_news_single(news):
     near one of these blocks.
 
     ## Input/output encoding
-    The source `content` may arrive as raw HTML tags (e.g. `<p>...</p>`) or as HTML-entity-escaped
-    text (e.g. `&lt;p&gt;...&lt;/p&gt;`). Detect which form the source uses and return your
-    `content` in that same form — do not switch a raw-tag source to escaped output, or vice versa.
+    The source `content` (and `image_cover_strdescription`/`image_story_strdescription`) may
+    arrive as raw HTML tags (e.g. `<p>...</p>`) or as HTML-entity-escaped text (e.g.
+    `&lt;p&gt;...&lt;/p&gt;`). Detect which form the source uses and return that same field in
+    that same form — do not switch a raw-tag source to escaped output, or vice versa.
 
     ## Output structure
-    Produce a single JSON object with exactly these fields: `title`, `summary`, `content`, `tags`,
-    `image_cover_image_text`, `image_cover_alt_image`, `keywordauto`, `categoryauto`.
+    Produce a single JSON object with exactly these fields: `title`, `subtitle`, `summary`,
+    `content`, `tags`, `keywordauto`, `image_cover_text`, `image_cover_original_title`,
+    `image_cover_original_description`, `image_cover_straltfoto`, `image_cover_strjudul`,
+    `image_cover_strdescription`, `image_story_text`, `image_story_original_title`,
+    `image_story_original_description`, `image_story_straltfoto`, `image_story_strjudul`,
+    `image_story_strdescription`.
 
     **Track A fields (full rewrite):**
 
@@ -219,6 +241,12 @@ def generate_news_single(news):
     carries the story's tone or twist; a title that keeps every fact but loses the framing
     ("Alumnus Moves to the US" instead of "Alumnus Flaunts Move to the US") is a different,
     flatter story than the source told.
+    - **`subtitle`** — a rewritten secondary headline/deck that expands on `title` with one
+    additional layer of specificity from the source (e.g. a key detail, party, or number the
+    headline itself didn't have room for). Same AP-style, natural-English treatment as `title`,
+    but not a repeat of it — it should add information, not restate the headline in other
+    words. No fixed character cap is specified here; keep it to a single concise sentence or
+    sentence fragment, in keeping with how a subtitle/deck reads in print.
     - **`summary`** — 1–2 sentence standalone summary of the core who/what/when/where/why.
     Must make sense on its own without reading `content` (this is what will show in article
     previews/listings). Do not just copy the first sentence of `content` verbatim — write it
@@ -226,13 +254,6 @@ def generate_news_single(news):
     who/what/when/where/why doesn't fit in 130 characters, prioritize who/what/when over
     where/why and compress ruthlessly — the result must still be a grammatically complete
     sentence, not a fragment cut off mid-word.
-    - **`image_cover_image_text`** — a rewritten (not literally translated) version of the source image
-    caption: natural, publication-quality English that conveys the same specific detail as the
-    source (who/what is shown), without inventing anything the source caption doesn't state.
-    - **`image_cover_alt_image`** — a rewritten (not literally translated) version of the source's image
-    `alt` text, in natural English, at the same level of descriptive detail as the source (this
-    is separate metadata, not the `alt` attribute already handled inline inside `content`'s own
-    `<img>` tags).
 
     **`content` (structure-preserved rewrite):**
 
@@ -250,8 +271,20 @@ def generate_news_single(news):
     not invent, drop, merge, or add generic tags.
     - **`keywordauto`** — the source auto-keywords translated into English, one-to-one, same
     count as the source.
-    - **`categoryauto`** — the source auto-category translated into English, preserving the same
-    category granularity as the source (do not rewrite into a different category scheme).
+    - **`image_cover_text`** — the cover image's caption/credit line, translated into natural
+    English at the same length as the source (e.g. "Foto: Ayu" → "Photo: Ayu").
+    - **`image_cover_original_title`** — the cover image's original title field, translated.
+    - **`image_cover_original_description`** — the cover image's longer descriptive text,
+    translated, same length and detail as the source.
+    - **`image_cover_straltfoto`** — the cover image's short alt-text string, translated, same
+    brevity as the source.
+    - **`image_cover_strjudul`** — the cover image's title-string field, translated.
+    - **`image_cover_strdescription`** — the cover image's HTML-formatted description, translated
+    with its tags preserved (see the HTML section above for this field).
+    - **`image_story_text`**, **`image_story_original_title`**, **`image_story_original_description`**,
+    **`image_story_straltfoto`**, **`image_story_strjudul`**, **`image_story_strdescription`** —
+    the same six translation-only treatments as their `image_cover_*` counterparts above,
+    applied to the article's story/inline image metadata instead of the cover image.
 
     Target length for `content`: proportional to the source article's own length — do not
     significantly expand or compress the amount of substantive information conveyed.
@@ -260,13 +293,23 @@ def generate_news_single(news):
     ```json
     {
     "title": "...",
+    "subtitle": "...",
     "summary": "...",
     "content": "<p>...</p><h2>Heading One</h2><p>...</p><table class=\"pic_artikel_sisip_table\">...<img src=\"...\" alt=\"...\" title=\"...\" caption=\"...\"/>...</table><p>...</p>",
     "tags": ["...", "...", "..."],
-    "image_cover_image_text": "...",
-    "image_cover_alt_image": "...",
     "keywordauto": ["...", "...", "..."],
-    "categoryauto": "..."
+    "image_cover_text": "Photo: Ayu",
+    "image_cover_original_title": "...",
+    "image_cover_original_description": "...",
+    "image_cover_straltfoto": "...",
+    "image_cover_strjudul": "...",
+    "image_cover_strdescription": "<p>...</p>",
+    "image_story_text": "Photo: Ayu",
+    "image_story_original_title": "...",
+    "image_story_original_description": "...",
+    "image_story_straltfoto": "...",
+    "image_story_strjudul": "...",
+    "image_story_strdescription": "<p>...</p>"
     }
     ```
 
@@ -291,13 +334,16 @@ def generate_news_single(news):
     - Does any place mentioned in `title` or `summary` stay a generic description if that's what
     the source gave, instead of reading like the proper name of a specific venue the source
     never actually named?
-    - Do `image_cover_image_text` and `image_cover_alt_image` read as natural rewritten English rather than literal
-    translations, without adding detail absent from the source?
-    - Are `tags`, `keywordauto`, and `categoryauto` faithful translations — not rewritten,
-    restructured, or expanded — while still accurate given the article's context?
+    - Does `subtitle` add a genuinely new detail beyond `title`, rather than rephrasing it?
+    - Are `tags`, `keywordauto`, and all twelve `image_cover_*`/`image_story_*` fields faithful
+    translations — not rewritten, restructured, tightened, or expanded — while still accurate
+    given the article's context?
+    - Do `image_cover_strdescription`/`image_story_strdescription` keep their HTML tags intact,
+    with only the inner text translated?
     - Have all "Baca juga"/"Tonton juga video" style non-content blocks been dropped from
     `content`, with no actual reporting removed along with them?
-    - Does the output `content` use the same raw-vs-escaped HTML encoding as the source?"""
+    - Does the output `content` use the same raw-vs-escaped HTML encoding as the source?
+"""
 
     prompt_input = f"""
     Below are the Indonesian source article:
