@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>detikGlobal — Preview &amp; Generate by Article ID</title>
+<style>
+  :root {
+    --border:#e5e7eb; --muted:#6b7280; --navy:#0f2148; --blue:#1a3a7a; --red:#c0392b;
+    --bg:#ffffff; --card:#f6f7f9;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:#1c2530;display:flex;flex-direction:column;}
+  header{padding:16px 24px;border-bottom:2px solid var(--navy);flex:0 0 auto;}
+  header h1{margin:0 0 4px;font-size:20px;color:var(--navy);}
+  header p{margin:0;color:var(--muted);font-size:13px;}
+
+  .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--border);flex:0 0 auto;}
+  .toolbar label{font-size:13px;color:var(--navy);font-weight:600;}
+  .toolbar input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;width:180px;background:#fff;}
+  .toolbar input:focus{outline:2px solid #c7d4f2;outline-offset:0;border-color:var(--blue);}
+  button{font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--blue);cursor:pointer;}
+  button:hover:not(:disabled){background:#eef2fb;}
+  button.primary{background:var(--navy);border-color:var(--navy);color:#fff;}
+  button.primary:hover:not(:disabled){background:#1a3a7a;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  .status{font-size:13px;color:var(--muted);}
+  .status.error{color:var(--red);}
+
+  main{flex:1 1 auto;overflow-y:auto;padding:24px;}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1400px;margin:0 auto;align-items:start;}
+  @media (max-width:900px){ .cols{grid-template-columns:1fr;} }
+  .col{border:1px solid var(--border);border-radius:8px;padding:16px;background:#fff;}
+  .col.placeholder{display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--muted);font-style:italic;text-align:center;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:3px;margin-bottom:10px;}
+  .badge-orig{background:#fdecea;color:var(--red);}
+  .badge-gen{background:#e8edfb;color:var(--blue);}
+  .col h2{font-size:18px;margin:0 0 8px;line-height:1.3;}
+  .summary{color:var(--muted);font-size:14px;margin:0 0 10px;}
+  .meta{font-size:12px;color:var(--muted);margin-bottom:6px;word-break:break-word;}
+  .content{font-size:14px;line-height:1.6;margin-top:12px;}
+  .content p{margin:0 0 10px;}
+  .content h2,.content h3{font-size:15px;margin:16px 0 6px;}
+  .content img{max-width:100%;height:auto;}
+  .content table{max-width:100%;}
+  .content .noncontent{display:none;}
+  .usage{margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--muted);}
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid #c7d4f2;border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<header>
+  <h1>detikGlobal — Preview &amp; Generate</h1>
+  <p>Enter a detik article ID to preview the Indonesian source, then generate the English rewrite side by side.</p>
+</header>
+
+<div class="toolbar">
+  <label for="articleId">Article ID</label>
+  <input id="articleId" type="text" inputmode="numeric" placeholder="e.g. 8606706" autocomplete="off">
+  <button id="previewBtn" class="primary" type="button">Preview input</button>
+  <button id="generateBtn" type="button" disabled>Generate output</button>
+  <span id="status" class="status"></span>
+</div>
+
+<main>
+  <div class="cols">
+    <div id="origCol" class="col placeholder">Enter an article ID and click &ldquo;Preview input&rdquo;.</div>
+    <div id="genCol" class="col placeholder">Generated English output will appear here.</div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const idInput = $("articleId"), previewBtn = $("previewBtn"), generateBtn = $("generateBtn");
+const statusEl = $("status"), origCol = $("origCol"), genCol = $("genCol");
+
+let currentArticle = null;
+
+function setStatus(msg, isError, busy) {
+  statusEl.className = "status" + (isError ? " error" : "");
+  statusEl.innerHTML = busy ? '<span class="spinner"></span>' : "";
+  statusEl.append(msg || "");
+}
+
+function placeholder(el, text) {
+  el.className = "col placeholder";
+  el.textContent = text;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// The API may return content as raw HTML or as HTML-entity-escaped text.
+function decodeContent(html) {
+  const s = String(html ?? "");
+  if (/<\s*[a-z]/i.test(s)) return s;
+  const ta = document.createElement("textarea");
+  ta.innerHTML = s;
+  return ta.value;
+}
+
+function tagList(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value ?? "").split("|").filter(Boolean).join(", ");
+}
+
+function renderOriginal(a) {
+  const cover = a.image_cover || {};
+  origCol.className = "col orig";
+  origCol.innerHTML = `
+    <div class="badge badge-orig">Input — Original (ID)</div>
+    <h2>${esc(a.title)}</h2>
+    <p class="summary">${esc(a.resume)}</p>
+    <div class="meta"><b>Category:</b> ${esc(a.categoryauto) || "&mdash;"} &nbsp;|&nbsp; <b>Tags:</b> ${esc(tagList(a.tags || a.tag))}</div>
+    <div class="meta"><b>Keywords:</b> ${esc(tagList(a.keywordauto)) || "&mdash;"}</div>
+    <div class="meta"><b>Image caption:</b> ${esc(cover.text) || "&mdash;"}</div>
+    <div class="meta"><b>Alt image:</b> ${esc(cover.alt_image) || "&mdash;"}</div>
+    <div class="content">${decodeContent(a.content)}</div>`;
+}
+
+function renderGenerated(g, usage) {
+  const u = usage || g.usage || {};
+  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
+  genCol.className = "col gen";
+  genCol.innerHTML = `
+    <div class="badge badge-gen">Output — Generated (EN)</div>
+    <h2>${esc(g.title)}</h2>
+    <p class="summary">${esc(g.summary)}</p>
+    <div class="meta"><b>Category:</b> ${esc(g.categoryauto)} &nbsp;|&nbsp; <b>Tags:</b> ${esc(tagList(g.tags))}</div>
+    <div class="meta"><b>Keywords:</b> ${esc(tagList(g.keywordauto))}</div>
+    <div class="meta"><b>Image caption:</b> ${esc(g.image_cover_image_text)}</div>
+    <div class="meta"><b>Alt image:</b> ${esc(g.image_cover_alt_image)}</div>
+    <div class="content">${decodeContent(g.content)}</div>
+    <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
+      (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+}
+
+async function api(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function setBusy(busy) {
+  previewBtn.disabled = busy;
+  generateBtn.disabled = busy || !currentArticle;
+}
+
+async function preview() {
+  const id = idInput.value.trim();
+  if (!/^\d+$/.test(id)) return setStatus("Enter a numeric article ID.", true, false);
+
+  currentArticle = null;
+  setBusy(true);
+  setStatus(`Fetching article ${id}…`, false, true);
+  placeholder(genCol, "Generated English output will appear here.");
+
+  try {
+    const { article } = await api(`/api/article?id=${encodeURIComponent(id)}`);
+    currentArticle = article;
+    renderOriginal(article);
+    setStatus("Input loaded. Click “Generate output”.", false, false);
+  } catch (e) {
+    placeholder(origCol, "Could not load this article.");
+    setStatus(e.message, true, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function generate() {
+  if (!currentArticle) return;
+  setBusy(true);
+  setStatus("Generating English rewrite… this can take a while.", false, true);
+  placeholder(genCol, "Generating…");
+
+  try {
+    const { generated, usage } = await api("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ article: currentArticle }),
+    });
+    renderGenerated(generated, usage);
+    setStatus("Done.", false, false);
+  } catch (e) {
+    placeholder(genCol, "Generation failed.");
+    setStatus(e.message, true, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+previewBtn.addEventListener("click", preview);
+generateBtn.addEventListener("click", generate);
+idInput.addEventListener("keydown", (e) => { if (e.key === "Enter") preview(); });
+idInput.addEventListener("input", () => { currentArticle = null; generateBtn.disabled = true; });
+</script>
+</body>
+</html>
