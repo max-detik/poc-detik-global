@@ -9,9 +9,14 @@ Reuses the existing scripts:
   - generate_articles.py-> build_news_input()   (article -> prompt input)
   - prompt.py           -> generate_news_single()(OpenRouter call)
 
+The whole site sits behind HTTP Basic auth; credentials come from BASIC_AUTH_USER
+and BASIC_AUTH_PASS in .env (Railway: set them as service variables).
+
 Run:  python detikGlobal/app.py   (then open http://127.0.0.1:8000)
 """
 
+import base64
+import hmac
 import json
 import os
 import sys
@@ -20,8 +25,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).parent
 WEB_DIR = BASE_DIR / "web"
+
+load_dotenv()
+BASIC_AUTH_USER = os.getenv("BASIC_AUTH_USER", "")
+BASIC_AUTH_PASS = os.getenv("BASIC_AUTH_PASS", "")
+AUTH_REALM = "detikGlobal"
 
 # prompt.py / generate_articles.py import each other by bare module name.
 sys.path.insert(0, str(BASE_DIR))
@@ -29,6 +41,21 @@ sys.path.insert(0, str(BASE_DIR))
 from generate_articles import build_news_input  # noqa: E402
 from prompt import generate_news_single  # noqa: E402
 from scraper import ScrapeError, scrape_article  # noqa: E402
+
+
+def check_credentials(header_value):
+    """True when the Authorization header carries the configured user/pass."""
+    scheme, _, encoded = (header_value or "").partition(" ")
+    if scheme.lower() != "basic":
+        return False
+    try:
+        user, _, password = base64.b64decode(encoded, validate=True).decode("utf-8").partition(":")
+    except Exception:
+        return False
+    # Both compared, non-short-circuit, so timing does not leak the username.
+    ok_user = hmac.compare_digest(user, BASIC_AUTH_USER)
+    ok_pass = hmac.compare_digest(password, BASIC_AUTH_PASS)
+    return ok_user & ok_pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -57,8 +84,27 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
+    def _authorized(self):
+        """Gate everything but /healthz, which the platform probes unauthenticated."""
+        if urlparse(self.path).path == "/healthz":
+            return True
+        if check_credentials(self.headers.get("Authorization")):
+            return True
+        body = json.dumps({"error": "authentication required"}).encode("utf-8")
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", f'Basic realm="{AUTH_REALM}", charset="UTF-8"')
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     # ---------- routes ----------
     def do_GET(self):
+        if not self._authorized():
+            return
+
         parsed = urlparse(self.path)
         if parsed.path in ("/", "/index.html"):
             index = WEB_DIR / "index.html"
@@ -74,6 +120,9 @@ class Handler(BaseHTTPRequestHandler):
         return self._send_json(404, {"error": "not found"})
 
     def do_POST(self):
+        if not self._authorized():
+            return
+
         if urlparse(self.path).path != "/api/generate":
             return self._send_json(404, {"error": "not found"})
 
@@ -114,6 +163,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    # Refuse to start unauthenticated rather than exposing the site by accident.
+    if not (BASIC_AUTH_USER and BASIC_AUTH_PASS):
+        sys.exit("Set BASIC_AUTH_USER and BASIC_AUTH_PASS (see .env.example) before starting.")
+
     # Railway injects PORT; bind 0.0.0.0 so the platform proxy can reach us.
     port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.getenv("PORT", "8000"))
     host = os.getenv("HOST", "0.0.0.0")

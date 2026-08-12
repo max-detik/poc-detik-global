@@ -6,6 +6,7 @@ Quick steps to deploy this project to Railway:
 2. Ensure the repo contains `Procfile` and `requirements.txt` (already present).
 3. Set the following environment variables in the Railway project settings:
    - `OPENROUTER_API_KEY` (required)
+   - `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` (required) — HTTP Basic credentials guarding the site; the app exits at startup if either is missing
    - optional: `OPENROUTER_MODEL`, `OPENROUTER_TEMPERATURE`, `OPENROUTER_REASONING_EFFORT`
 4. Deploy — Railway will install dependencies from `requirements.txt` and run `web: python app.py`.
 
@@ -16,7 +17,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# set OPENROUTER_API_KEY in .env
+# set OPENROUTER_API_KEY, BASIC_AUTH_USER and BASIC_AUTH_PASS in .env
 python app.py
 ```
 
