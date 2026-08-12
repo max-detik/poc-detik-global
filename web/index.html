@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>detikGlobal — Preview &amp; Generate by Article ID</title>
+<title>detikGlobal — Generate New Article</title>
 <style>
   :root {
     --border:#e5e7eb; --muted:#6b7280; --navy:#0f2148; --blue:#1a3a7a; --red:#c0392b;
@@ -55,43 +55,30 @@
 </head>
 <body>
 <header>
-  <h1>detikGlobal — Preview &amp; Generate</h1>
-  <p>Pick an article from the curated dataset, or paste a detik.com article URL to scrape it. Preview the Indonesian source, then generate the English rewrite side by side.</p>
+  <h1>detikGlobal — Generate New Article</h1>
+  <p>Paste a detik.com article URL. The Indonesian source is scraped and its English rewrite generated, side by side.</p>
 </header>
 
 <div class="toolbar">
   <div class="row">
-    <label for="articleId">Dataset</label>
-    <select id="articleId" disabled><option value="">Loading articles…</option></select>
-    <button id="previewBtn" class="primary" type="button" disabled>Preview input</button>
-  </div>
-  <div class="sep"></div>
-  <div class="row">
     <label for="articleUrl">detik.com URL</label>
     <input id="articleUrl" type="url" placeholder="https://finance.detik.com/…/d-8615053/…" autocomplete="off" spellcheck="false">
-    <button id="scrapeBtn" class="primary" type="button">Scrape &amp; preview</button>
-  </div>
-  <div class="sep"></div>
-  <div class="row">
-    <button id="generateBtn" type="button" disabled>Generate output</button>
+    <button id="generateBtn" class="primary" type="button">Generate New Article</button>
     <span id="status" class="status"></span>
   </div>
 </div>
 
 <main>
   <div class="cols">
-    <div id="origCol" class="col placeholder">Choose an article and click &ldquo;Preview input&rdquo;.</div>
+    <div id="origCol" class="col placeholder">Paste a detik.com URL and click &ldquo;Generate New Article&rdquo;.</div>
     <div id="genCol" class="col placeholder">Generated English output will appear here.</div>
   </div>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const idSelect = $("articleId"), previewBtn = $("previewBtn"), generateBtn = $("generateBtn");
-const urlInput = $("articleUrl"), scrapeBtn = $("scrapeBtn");
+const generateBtn = $("generateBtn"), urlInput = $("articleUrl");
 const statusEl = $("status"), origCol = $("origCol"), genCol = $("genCol");
-
-let currentArticle = null;
 
 function setStatus(msg, isError, busy) {
   statusEl.className = "status" + (isError ? " error" : "");
@@ -161,65 +148,37 @@ async function api(url, options) {
 }
 
 function setBusy(busy) {
-  previewBtn.disabled = busy || !idSelect.value;
-  generateBtn.disabled = busy || !currentArticle;
-  idSelect.disabled = busy;
-  scrapeBtn.disabled = busy;
+  generateBtn.disabled = busy;
   urlInput.disabled = busy;
 }
 
-async function loadArticleList() {
-  try {
-    const { articles } = await api("/api/articles");
-    idSelect.innerHTML = "";
-    for (const a of articles) {
-      const opt = document.createElement("option");
-      opt.value = a.id;
-      opt.textContent = `${a.id} — ${a.title}`;
-      idSelect.append(opt);
-    }
-    idSelect.disabled = false;
-    previewBtn.disabled = !idSelect.value;
-    setStatus(`${articles.length} article(s) available.`, false, false);
-  } catch (e) {
-    idSelect.innerHTML = '<option value="">Could not load articles</option>';
-    setStatus(e.message, true, false);
-  }
-}
+// Scrape first so the source shows immediately, then generate the rewrite.
+async function generateNewArticle() {
+  const url = urlInput.value.trim();
+  if (!url) return setStatus("Paste a detik.com article URL first.", true, false);
 
-async function preview() {
-  const id = idSelect.value;
-  if (!id) return setStatus("Choose an article first.", true, false);
-
-  currentArticle = null;
   setBusy(true);
-  setStatus(`Loading article ${id}…`, false, true);
+  setStatus("Scraping detik.com…", false, true);
+  placeholder(origCol, "Scraping…");
   placeholder(genCol, "Generated English output will appear here.");
 
+  let article;
   try {
-    const { article } = await api(`/api/article?id=${encodeURIComponent(id)}`);
-    currentArticle = article;
+    ({ article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`));
     renderOriginal(article);
-    setStatus("Input loaded. Click “Generate output”.", false, false);
   } catch (e) {
-    placeholder(origCol, "Could not load this article.");
+    placeholder(origCol, "Could not scrape this URL.");
     setStatus(e.message, true, false);
-  } finally {
-    setBusy(false);
+    return setBusy(false);
   }
-}
 
-async function generate() {
-  if (!currentArticle) return;
-  setBusy(true);
   setStatus("Generating English rewrite… this can take a while.", false, true);
   placeholder(genCol, "Generating…");
-
   try {
     const { generated, usage } = await api("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ article: currentArticle }),
+      body: JSON.stringify({ article }),
     });
     renderGenerated(generated, usage);
     setStatus("Done.", false, false);
@@ -231,39 +190,8 @@ async function generate() {
   }
 }
 
-async function scrape() {
-  const url = urlInput.value.trim();
-  if (!url) return setStatus("Paste a detik.com article URL first.", true, false);
-
-  currentArticle = null;
-  setBusy(true);
-  setStatus("Scraping detik.com…", false, true);
-  placeholder(genCol, "Generated English output will appear here.");
-
-  try {
-    const { article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`);
-    currentArticle = article;
-    renderOriginal(article);
-    setStatus("Scraped. Click “Generate output”.", false, false);
-  } catch (e) {
-    placeholder(origCol, "Could not scrape this URL.");
-    setStatus(e.message, true, false);
-  } finally {
-    setBusy(false);
-  }
-}
-
-previewBtn.addEventListener("click", preview);
-scrapeBtn.addEventListener("click", scrape);
-urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") scrape(); });
-generateBtn.addEventListener("click", generate);
-idSelect.addEventListener("change", () => {
-  currentArticle = null;
-  generateBtn.disabled = true;
-  previewBtn.disabled = !idSelect.value;
-});
-
-loadArticleList();
+generateBtn.addEventListener("click", generateNewArticle);
+urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") generateNewArticle(); });
 </script>
 </body>
 </html>
