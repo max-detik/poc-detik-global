@@ -23,6 +23,27 @@
   .toolbar input{flex:1 1 340px;min-width:240px;}
   .toolbar .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;width:100%;}
   .toolbar .sep{width:100%;border-top:1px dashed var(--border);}
+  .tabs{display:flex;gap:4px;width:100%;border-bottom:1px solid var(--border);margin-bottom:2px;}
+  .tab{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:1px solid var(--border);border-bottom:none;border-radius:6px 6px 0 0;background:#fff;color:var(--muted);cursor:pointer;margin-bottom:-1px;}
+  .tab:hover:not(.active){background:#eef2fb;}
+  .tab.active{color:var(--navy);border-color:var(--navy);border-bottom:1px solid #fff;background:#fff;}
+  .panel{display:none;width:100%;}
+  .panel.active{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+  .presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;width:100%;max-width:900px;}
+  @media (max-width:640px){ .presets{grid-template-columns:1fr;} }
+  .preset{position:relative;display:block;padding:12px 14px 12px 38px;background:#fff;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;}
+  .preset:hover{border-color:#c7d4f2;background:#fbfcff;}
+  .preset input{position:absolute;opacity:0;pointer-events:none;}
+  .preset .dot{position:absolute;left:14px;top:14px;width:14px;height:14px;border:2px solid #c3cad6;border-radius:50%;background:#fff;transition:border-color .15s;}
+  .preset .dot::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--navy);transform:scale(0);transition:transform .15s;}
+  .preset .src{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);background:#e8edfb;padding:2px 6px;border-radius:3px;margin-bottom:6px;}
+  .preset .t{display:block;font-size:13px;font-weight:600;color:#1c2530;line-height:1.4;}
+  .preset .u{display:block;margin-top:5px;color:var(--muted);font-size:11px;word-break:break-all;}
+  .preset:has(input:checked){border-color:var(--navy);background:#f7f9ff;box-shadow:0 0 0 1px var(--navy) inset;}
+  .preset:has(input:checked) .dot{border-color:var(--navy);}
+  .preset:has(input:checked) .dot::after{transform:scale(1);}
+  .preset:has(input:focus-visible){outline:2px solid #c7d4f2;outline-offset:2px;}
+  .preset:has(input:disabled){opacity:.55;cursor:not-allowed;}
   button{font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--blue);cursor:pointer;}
   button:hover:not(:disabled){background:#eef2fb;}
   button.primary{background:var(--navy);border-color:var(--navy);color:#fff;}
@@ -62,9 +83,36 @@
 </header>
 
 <div class="toolbar">
-  <div class="row">
+  <div class="tabs" role="tablist">
+    <button class="tab active" type="button" role="tab" data-tab="input" aria-selected="true">Paste URL</button>
+    <button class="tab" type="button" role="tab" data-tab="preset" aria-selected="false">Pick a sample</button>
+  </div>
+
+  <div class="panel active" id="panel-input" role="tabpanel">
     <label for="articleUrl">detik.com URL</label>
     <input id="articleUrl" type="url" placeholder="https://finance.detik.com/…/d-8615053/…" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="panel" id="panel-preset" role="tabpanel">
+    <div class="presets" id="presets" role="radiogroup" aria-label="Sample articles">
+      <label class="preset">
+        <input type="radio" name="presetUrl" value="https://www.detik.com/bali/nusra/d-8604738/misteri-pria-tewas-telanjang-di-penginapan-usai-check-in-dengan-perempuan" checked>
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">detikBali</span>
+        <span class="t">Misteri pria tewas telanjang di penginapan usai check-in dengan perempuan</span>
+        <span class="u">detik.com/bali/nusra/d-8604738</span>
+      </label>
+      <label class="preset">
+        <input type="radio" name="presetUrl" value="https://wolipop.detik.com/worklife/d-8606706/viral-alumni-sma-bogor-pamer-pindah-ke-as-demi-kejar-mimpi-faktanya-ternyata">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">Wolipop · Worklife</span>
+        <span class="t">Viral alumni SMA Bogor pamer pindah ke AS demi kejar mimpi, faktanya ternyata</span>
+        <span class="u">wolipop.detik.com/worklife/d-8606706</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="row">
     <button id="generateBtn" class="primary" type="button">Generate New Article</button>
     <span id="status" class="status"></span>
   </div>
@@ -81,6 +129,27 @@
 const $ = (id) => document.getElementById(id);
 const generateBtn = $("generateBtn"), urlInput = $("articleUrl");
 const statusEl = $("status"), origCol = $("origCol"), genCol = $("genCol");
+const tabs = document.querySelectorAll(".tab");
+let activeTab = "input";
+
+tabs.forEach((tab) => tab.addEventListener("click", () => {
+  if (generateBtn.disabled) return;
+  activeTab = tab.dataset.tab;
+  tabs.forEach((t) => {
+    const on = t === tab;
+    t.classList.toggle("active", on);
+    t.setAttribute("aria-selected", String(on));
+    $("panel-" + t.dataset.tab).classList.toggle("active", on);
+  });
+}));
+
+function selectedUrl() {
+  if (activeTab === "preset") {
+    const picked = document.querySelector('input[name="presetUrl"]:checked');
+    return picked ? picked.value : "";
+  }
+  return urlInput.value.trim();
+}
 
 function setStatus(msg, isError, busy) {
   statusEl.className = "status" + (isError ? " error" : "");
@@ -158,12 +227,13 @@ async function api(url, options) {
 function setBusy(busy) {
   generateBtn.disabled = busy;
   urlInput.disabled = busy;
+  document.querySelectorAll('input[name="presetUrl"]').forEach((r) => { r.disabled = busy; });
 }
 
 // Scrape first so the source shows immediately, then generate the rewrite.
 async function generateNewArticle() {
-  const url = urlInput.value.trim();
-  if (!url) return setStatus("Paste a detik.com article URL first.", true, false);
+  const url = selectedUrl();
+  if (!url) return setStatus(activeTab === "preset" ? "Pick one of the sample articles first." : "Paste a detik.com article URL first.", true, false);
 
   setBusy(true);
   setStatus("Scraping detik.com…", false, true);
