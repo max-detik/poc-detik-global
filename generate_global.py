@@ -2,7 +2,7 @@ import json
 import sys
 from pathlib import Path
 
-from prompt import generate_news_single
+from prompt import generate_news_multi
 
 INPUT_PATH = Path(__file__).parent / "apis-data.json"
 OUTPUT_PATH = Path(__file__).parent / "generated-articles.json"
@@ -30,7 +30,7 @@ def generate_with_retries(news, cost_tracker, attempts=MAX_ATTEMPTS):
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
-            generated, token_usage = generate_news_single(news)
+            generated, token_usage = generate_news_multi([news])
         except Exception as e:
             last_error = e
             print(f"  attempt {attempt}/{attempts} failed: {e}", file=sys.stderr)

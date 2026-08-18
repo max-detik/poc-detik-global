@@ -8,7 +8,7 @@ the same fields either way. Nothing here calls apis.detik.com.
 Reuses the existing scripts:
   - scraper.py          -> scrape_article()       (detik.com URL -> article dict)
   - generate_articles.py-> generate_from_articles()(articles -> generated article)
-  - prompt.py           -> generate_news_single() / generate_news_multi()
+  - prompt.py           -> generate_news_multi()
 
 The whole site sits behind HTTP Basic auth; credentials come from BASIC_AUTH_USER
 and BASIC_AUTH_PASS in .env (Railway: set them as service variables).

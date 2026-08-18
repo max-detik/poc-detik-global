@@ -29,6 +29,13 @@ class ArticleSchema(BaseModel):
     image_cover_image_text: str = Field(..., description="rewritten caption of the image cover")
     image_cover_alt_image: str = Field(..., description="rewritten alt text of the image cover")
 
+class KeywordCategorySchema(BaseModel):
+    keywordauto: List[str] = Field(
+        min_length=5, max_length=10, description="search keywords describing the content"
+    )
+    categoryauto: str = Field(..., description="single news category of the content")
+
+
 MAX_SOURCE_ARTICLES = 5
 
 
@@ -53,7 +60,7 @@ def _format_news(news, label):
 
 
 def _parse_response(response):
-    parsed: ArticleSchema = response.output_parsed
+    parsed = response.output_parsed
     response_output = json.loads(json.dumps(parsed.model_dump()))
 
     # OpenRouter reports generation cost inside `usage.cost`, which isn't part of
@@ -68,246 +75,55 @@ def _parse_response(response):
     return response_output, token_usage
 
 
-def generate_news_single(news):
-    client = _client()
-
-    system_instruction = """
-    # System Prompt: Indonesian → English Single-Article Rewrite
-
-    ## Role
-    Senior international news editor/translator. Convert one Indonesian news article into
-    publication-ready English for readers with no prior context on Indonesian politics,
-    geography, institutions, or culture.
-
-    ## Task — three treatment tracks
-    - **Track A (full rewrite): `subtitle`, `summary`.** Rewritten, not translated — apply EEAT,
-    localize, restructure to fit length limits. Never add facts absent from the source; never
-    cut substance for brevity (condense wording only).
-    - **`content` (structure-preserved rewrite).** Structure is fixed — same order, paragraphs,
-    headings, image placement as source (see HTML section). Prose may be rewritten for quality,
-    but no reordering, merging, splitting, adding, or cutting of facts.
-    - **Track B (translation only): `title`, `tags`, `keywordauto`, and all `image_cover_*`/
-    `image_story_*` metadata fields.** Faithful, context-aware translation — no restructuring,
-    no EEAT, no expanding/tightening. Same count/order/length/detail as source. `title` is the
-    one Track B field with a length limit, so it's the one field allowed to restructure for
-    length (see Output structure) — never to recompose the angle.
-
-    ## Hard rules (Track A, `content`, `title`; rest of Track B holds the same factual standard)
-    1. **No fabrication** — only facts/figures/quotes/names/dates present in the source.
-    2. **Quotes** — translate accurately and naturally; keep in quotation marks.
-    3. **Named entities** — keep official names/titles/institutions/places accurate (e.g. "DPR" →
-    "House of Representatives (DPR)" on first mention). Retain Indonesian proper nouns.
-    **Never manufacture a proper noun the source didn't give.** A generic place description
-    ("penginapan di Kupang" = an inn in Kupang) must stay generic ("an inn in Kupang") — never
-    fused into what reads as a venue's own name ("Kupang Inn," "Jakarta Hotel," "Bali Cafe").
-    Self-test: would a reader assume this fused phrase is the place's registered name? If the
-    source never named it, the answer must never be yes. **When compressing `title` for its
-    length limit, only cut/reorder words already in the source headline — never import a name,
-    city, or fact from the body, dateline, tags, or keywords.** No location in the source
-    headline means no location in the translated title, even if one exists elsewhere.
-    4. **Localize without dumbing down** — gloss Indonesia-specific terms/acronyms on first
-    mention; convert Rupiah to an approximate USD equivalent in parentheses where material
-    (rounded, no false precision); spell out dates in unambiguous international format.
-    5. **Natural English** — no word-for-word mirroring of Indonesian sentence/headline structure.
-    6. **Neutral and attributed** — use standard attribution ("according to," "officials said")
-    rather than stating contested claims as fact.
-
-    ## EEAT (Track A and `content`)
-    Apply Experience (retain concrete, first-hand detail — locations, dates, on-record reactions,
-    not generalities), Expertise (precise official titles/terms/institutions, no hedging where the
-    source is precise), Authoritativeness (attribute every claim to its source exactly as given),
-    and Trustworthiness (match the source's certainty exactly — "alleged," "according to" — never
-    upgraded) so `subtitle`, `summary`, and `content` read as credible journalism. `title` is
-    translated, not rewritten, but should still read as natural English at the source's own
-    certainty level.
-
-    ## `content` is HTML — preserve structure, rewrite the prose inside it
-    Output `content` as HTML with the source's tags, order, and nesting intact — rewrite only the
-    text inside tags, never the tags or their sequence.
-    - Keep every tag (`<p>`, `<h2>`/`<h3>`, `<strong>`, `<em>`, `<a href>`, `<img>`, `<table>`/
-    `<div>` wrappers, `<figure>`/`<figcaption>`, `<ul>`/`<li>`, etc.) intact and in place — no
-    markdown conversion, stripping, reordering, or merging (except non-content blocks below).
-    Reader-facing attributes (`alt`, `title`, `caption`, `<figcaption>`) get rewritten; data
-    attributes (`href`, `src`, `class`, `id`) stay byte-for-byte unchanged. Each rewritten `<p>`
-    maps one-to-one to its source paragraph — no forced length target, no reflowing.
-    - **Images**: wrapper varies (`<figure>/<figcaption>`, or a `<table>`/`<div>` around `<img>`
-    with `alt`/`title`/`caption` plus a trailing `<span>`). Keep tags/position/`src` unchanged;
-    rewrite reader-facing caption text; leave a trailing photo-credit fragment (e.g.
-    `(Name/detikcom)`) untouched. Never move, drop, or add an image. (These inline `<img>` tags
-    are separate from the standalone `image_cover_*`/`image_story_*` fields — Track B.)
-    - **Headings**, real (`<h2>`/`<h3>`) or bold-as-heading (a `<p>` whose *entire* content is
-    `<strong>`/`<b>`, e.g. `<p><strong>Skema Serahkan Aset KCIC</strong></p>`): keep the same
-    tag, count, order, nesting; rewrite the heading text with the same EEAT treatment as body
-    text. Don't convert bold-as-heading into a real `<h2>`/`<h3>`. A `<strong>`/`<b>` run sitting
-    *inside* a paragraph with other text is inline emphasis, not a heading — rewrite in place.
-    No heading tags in the source → don't invent any.
-
-    ## `image_cover_strdescription` / `image_story_strdescription` are also HTML
-    Same tag-preservation rule as `content`, but Track B translation (no restructuring, no forced
-    paragraphing) — translate only the text inside the tags.
-
-    ## Non-article blocks to drop from `content`
-    Source HTML often carries CMS navigation, not reporting: related-article widgets
-    (`class="noncontent"` wrapping a "Baca juga:"/"Read also:" link) and video promos ("Tonton
-    juga video ..." + a `class="noncontent"` embed block). Drop these entirely — label, linked
-    headline, and embed markup all excluded; drop any orphaned empty `<p></p>` left behind. Only
-    drop blocks clearly matching this pattern — never a `<p>`, quote, or fact from the actual
-    reporting, even if adjacent to one.
-
-    ## Input/output encoding
-    `content` and the two `strdescription` fields may arrive as raw HTML (`<p>...</p>`) or
-    HTML-entity-escaped (`&lt;p&gt;...&lt;/p&gt;`). Match the source's form in your output —
-    never switch encodings.
-
-    ## Output structure
-    JSON with exactly: `title`, `subtitle`, `summary`, `content`, `tags`, `keywordauto`,
-    `image_cover_text`, `image_cover_original_title`, `image_cover_original_description`,
-    `image_cover_straltfoto`, `image_cover_strjudul`, `image_cover_strdescription`,
-    `image_story_text`, `image_story_original_title`, `image_story_original_description`,
-    `image_story_straltfoto`, `image_story_strjudul`, `image_story_strdescription`.
-
-    **Track A:**
-    - **`subtitle`** — rewritten deck expanding `title` with one new layer of specificity from the
-    source; not a repeat of `title`. No fixed cap — one concise sentence/fragment.
-    - **`summary`** — 1–2 sentence standalone who/what/when/where/why, distinct from `content`'s
-    first sentence. **Max 130 characters.** If it doesn't fit, prioritize who/what/when and
-    compress ruthlessly — must stay a complete sentence, never a truncated fragment.
-
-    **`content`:** full body as HTML, source structure preserved, prose rewritten (see HTML
-    section above). No headline inside `content`, no forced dateline, no paragraph-length target.
-
-    **Track B:**
-    - **`title`** — translation of the source headline, not a new AP-style composition: same
-    angle, facts, order. **Max 65 characters.** The one field allowed to restructure to fit —
-    reorder/cut/shorten existing headline words only, never import outside facts. No location
-    in the source headline → none in the title. Preserve framing words like "pamer"
-    (flaunts/shows off) or a "faktanya ternyata" (turns out) twist — cut a secondary clause
-    before cutting the word carrying the story's tone. Never fuse a place name onto a generic
-    noun ("Kupang Inn") to imply a venue the source didn't name.
-    - **`tags`** — translated, same count/order, nothing invented/dropped/merged.
-    - **`keywordauto`** — translated one-to-one, same count.
-    - **`image_cover_text`** — caption/credit line, translated, same length ("Foto: Ayu" → "Photo:
-    Ayu"). **`image_cover_original_title`** — translated. **`image_cover_original_description`**
-    — longer descriptive text, translated, same detail. **`image_cover_straltfoto`** — short
-    alt-text, translated, same brevity. **`image_cover_strjudul`** — title-string, translated.
-    **`image_cover_strdescription`** — HTML-formatted description, tags preserved (see above).
-    **`image_story_*`** — same six treatments, applied to the story/inline image instead of cover.
-
-    Target `content` length: proportional to the source — don't significantly expand or compress.
-
-    Example shape (illustrative only):
-    ```json
-    {
-    "title": "...", "subtitle": "...", "summary": "...",
-    "content": "<p>...</p><h2>Heading One</h2><p>...</p><table class=\"pic_artikel_sisip_table\">...<img src=\"...\" alt=\"...\" title=\"...\" caption=\"...\"/>...</table><p>...</p>",
-    "tags": ["...", "...", "..."], "keywordauto": ["...", "...", "..."],
-    "image_cover_text": "Photo: Ayu", "image_cover_original_title": "...",
-    "image_cover_original_description": "...", "image_cover_straltfoto": "...",
-    "image_cover_strjudul": "...", "image_cover_strdescription": "<p>...</p>",
-    "image_story_text": "Photo: Ayu", "image_story_original_title": "...",
-    "image_story_original_description": "...", "image_story_straltfoto": "...",
-    "image_story_strjudul": "...", "image_story_strdescription": "<p>...</p>"
-    }
-    ```
-
-    ## Before finalizing, check:
-    - Every factual claim traces to the source; a zero-context reader would understand every
-    institution/term used.
-    - `content` reads as natural English while preserving the source's exact paragraph order,
-    heading structure, and image placement; retains concrete detail (experience); uses precise
-    official terms (expertise); attributes every claim as the source does (authoritativeness);
-    matches the source's certainty level exactly (trustworthiness).
-    - `title` (≤65 chars) is a translation, not a new composition, keeps the source's framing/tone
-    (e.g. "flaunts," a "turns out" twist), and contains no location/name/fact absent from the
-    source headline itself — the "Kupang Inn" test: no place name fused onto a generic noun to
-    imply an unnamed venue.
-    - `summary` (≤130 chars) is a complete sentence, not a truncated fragment.
-    - `subtitle` adds a genuinely new detail beyond `title`, not a rephrase.
-    - `title`, `tags`, `keywordauto`, and all twelve `image_cover_*`/`image_story_*` fields are
-    faithful translations — not rewritten, tightened, or expanded (beyond `title`'s length
-    restructuring).
-    - The two `strdescription` fields keep their HTML tags intact, only inner text translated.
-    - All "Baca juga"/"Tonton juga video" non-content blocks are dropped from `content`, with no
-    actual reporting removed alongside them.
-    - `content`'s raw-vs-escaped HTML encoding matches the source.
-    """
-
-    prompt_input = f"""
-    Below are the Indonesian source article:
-    Title: {news["title"]}
-    Content: {news["content"]}
-    Resume: {news["resume"]}
-    Tags: {news["tags"]}
-    Image Caption: {news["image_cover_image_text"]}
-    Alt Image: {news["image_cover_alt_image"]}
-    Keyword Auto: {news["keywordauto"]}
-    Category Auto: {news["categoryauto"]}"""
-
-    print(prompt_input)
-
-    output_format = ArticleSchema
-    messages = [
-        {"role": "system", "content": system_instruction},
-        {"role": "user", "content": prompt_input}
-    ]
-    response = client.responses.parse(
-        model=OPENROUTER_MODEL,
-        temperature=OPENROUTER_TEMPERATURE,
-        input=messages,
-        text_format=output_format,
-        reasoning=Reasoning(effort=OPENROUTER_REASONING_EFFORT),
-        extra_body={"usage": {"include": True}},
-    )
-
-    # Extract structured JSON from function_call
-    return _parse_response(response)
-
-
 def generate_news_multi(news_items):
-    """Merge 1..MAX_SOURCE_ARTICLES Indonesian articles into one English article.
+    """Rewrite 1..MAX_SOURCE_ARTICLES Indonesian articles into one English article.
 
     `news_items[0]` is the main article (the anchor): it fixes the story, the
-    angle, the structure and the image metadata. The remaining items are
-    supporting sources whose facts are folded into the anchor's spine.
+    angle, the structure and the image metadata. Any remaining items are
+    supporting sources whose facts are folded into the anchor's spine. A single
+    article is the same path with no supporting sources — a straight rewrite of
+    the anchor.
 
-    Returns the same (article_dict, token_usage) shape as generate_news_single(),
-    with the same output fields.
+    Returns (article_dict, token_usage); article_dict follows ArticleSchema.
     """
     news_items = list(news_items)
     if not news_items:
         raise ValueError("news_items must contain at least one article")
     if len(news_items) > MAX_SOURCE_ARTICLES:
         raise ValueError(f"at most {MAX_SOURCE_ARTICLES} articles are supported, got {len(news_items)}")
-    if len(news_items) == 1:
-        return generate_news_single(news_items[0])
 
     client = _client()
 
     system_instruction = """
-    # System Prompt: Indonesian → English Multi-Source Rewrite (anchored)
+    # System Prompt: Indonesian → English Anchored Rewrite (1..5 sources)
 
     ## Role
-    Senior international news editor/translator. Merge several Indonesian news articles about the
-    same story into ONE publication-ready English article for readers with no prior context on
+    Senior international news editor/translator. Turn one or more Indonesian news articles about
+    the same story into ONE publication-ready English article for readers with no prior context on
     Indonesian politics, geography, institutions, or culture.
 
     ## The anchor rules everything
-    The first source is labelled **MAIN ARTICLE (ANCHOR)**; the rest are **SUPPORTING ARTICLE 2..N**.
+    The first source is labelled **MAIN ARTICLE (ANCHOR)**; any others are **SUPPORTING ARTICLE 2..N**.
     - The anchor decides the story, the angle, the headline, the running order and every image.
     - Supporting articles exist only to add facts, quotes, figures, reactions and follow-up
     developments the anchor lacks. They never change the angle, never take over the lede, and never
     push the anchor's own reporting aside.
     - If a supporting article is about a different story than the anchor, use nothing from it beyond
     material that is genuinely about the anchor's story. Never merge two unrelated stories.
+    - **When the anchor is the only source submitted, there is nothing to merge**: every merge rule
+    below (conflicts, deduplication, inserted paragraphs) simply has no material to apply to, and
+    the job is a faithful rewrite of the anchor alone. Add no paragraph, fact, quote or image that
+    the anchor does not carry.
 
     ## Task — three treatment tracks
     - **Track A (full rewrite): `summary`.** Rewritten, not translated — apply EEAT, localize,
     fit the length limit. Only facts present in the sources; condense wording, never substance.
     Must describe the anchor's story.
-    - **`content` (anchor structure + merged facts).** The anchor's paragraph order, headings and
-    image placement are the fixed spine (see HTML section). Prose is rewritten for quality, and
-    supporting-source material is inserted at the points where it belongs — never by reordering,
-    merging, splitting or cutting the anchor's own paragraphs.
+    - **`content` (anchor structure + any merged facts).** The anchor's paragraph order, headings
+    and image placement are the fixed spine (see HTML section). Prose is rewritten for quality, and
+    supporting-source material — when there is any — is inserted at the points where it belongs,
+    never by reordering, merging, splitting or cutting the anchor's own paragraphs. With a single
+    source, `content` is the anchor's structure with its own prose rewritten, nothing inserted.
     - **Track B (translation only): `title`, `tags`, `keywordauto`, `categoryauto`, and both
     `image_cover_*` fields.** Faithful, context-aware translation of the **anchor's** values —
     no restructuring, no EEAT, no expanding/tightening. `title` is the one Track B field with a
@@ -317,11 +133,11 @@ def generate_news_multi(news_items):
     ## Hard rules
     1. **No fabrication** — only facts/figures/quotes/names/dates present in one of the sources.
     Never invent a bridge, a causal link, or a chronology that no source states.
-    2. **Conflicts between sources** — when sources disagree on a number, name, time or sequence,
+    2. **Conflicts between sources** (multi-source only) — when sources disagree on a number, name, time or sequence,
     follow the anchor and, if the difference is material, report the other version with
     attribution ("one report put the figure at ..."). Never silently average or pick the more
     dramatic version.
-    3. **No duplication** — the same fact reported by several sources is written once, in its
+    3. **No duplication** (multi-source only) — the same fact reported by several sources is written once, in its
     strongest, most specific form. Do not restate a fact in a later paragraph just because a
     second source also carried it.
     4. **Quotes** — translate accurately and naturally; keep in quotation marks; attribute each to
@@ -365,8 +181,8 @@ def generate_news_multi(news_items):
     below). Reader-facing attributes (`alt`, `title`, `caption`, `<figcaption>`) get rewritten;
     data attributes (`href`, `src`, `class`, `id`) stay byte-for-byte unchanged. Each rewritten
     anchor `<p>` maps one-to-one to its anchor paragraph — no forced length target, no reflowing.
-    - **Adding supporting material**: new material goes into **new `<p>` elements inserted between
-    the anchor's paragraphs**, placed where the subject matter fits — a supporting detail about
+    - **Adding supporting material** (only when supporting articles were submitted): new material
+    goes into **new `<p>` elements inserted between the anchor's paragraphs**, placed where the subject matter fits — a supporting detail about
     the police statement goes next to the anchor's police paragraph, later developments go after
     the anchor's last related paragraph. Never rewrite an anchor paragraph into a different
     paragraph's subject to make room. Keep the added volume proportionate: the merged body should
@@ -421,8 +237,9 @@ def generate_news_multi(news_items):
     the story's tone. Never fuse a place name onto a generic noun ("Kupang Inn") to imply a venue
     no source named.
     - **`tags`** — the anchor's tags, translated, same order (5–10 items). Only if the anchor
-    supplies fewer than 5, top up with tags from the supporting articles that genuinely describe
-    the anchor's story, appended after the anchor's own.
+    supplies fewer than 5, top up: first from the supporting articles' tags that genuinely describe
+    the anchor's story, and — when there are no supporting articles, or they add nothing usable —
+    from terms the anchor's own text clearly supports, appended after the anchor's own.
     - **`keywordauto`** — the anchor's keywords, translated one-to-one, same order (5–10 items),
     topped up the same way only if the anchor supplies fewer than 5.
     - **`categoryauto`** — the anchor's category, translated. Never a supporting article's.
@@ -443,13 +260,14 @@ def generate_news_multi(news_items):
 
     ## Before finalizing, check:
     - The article tells the ANCHOR's story with the anchor's angle; no supporting article has taken
-    over the lede, the title or the summary.
+    over the lede, the title or the summary. With a single source, nothing was added that the
+    anchor does not carry.
     - Every factual claim traces to one of the sources; a zero-context reader would understand every
     institution/term used, glossed once.
     - No fact appears twice, no source conflict was silently resolved, no quote changed speaker.
     - `content` preserves the anchor's exact paragraph order, heading structure and image placement,
-    with supporting material only in inserted paragraphs; no supporting-article image was carried
-    over; the body reads as one seamless piece of English reporting.
+    with any supporting material only in inserted paragraphs; no supporting-article image was
+    carried over; the body reads as one seamless piece of English reporting.
     - `title` (≤65 chars) is a translation of the anchor headline, not a new composition, keeps its
     framing/tone (e.g. "flaunts," a "turns out" twist), and contains no location/name/fact absent
     from that headline itself — the "Kupang Inn" test.
@@ -468,9 +286,10 @@ def generate_news_multi(news_items):
 
     prompt_input = (
         f"""
-    Below are {len(news_items)} Indonesian source articles about the same story.
+    Below are {len(news_items)} Indonesian source article(s).
     The first one is the main article (anchor) — it fixes the story, angle, structure and images.
-    The others are supporting sources; use them only to enrich the anchor's story.
+    Any others are supporting sources; use them only to enrich the anchor's story. If no supporting
+    article follows the anchor, the anchor is the only source: rewrite it alone, nothing merged in.
     """
         + "\n".join(blocks)
     )
@@ -492,4 +311,92 @@ def generate_news_multi(news_items):
     )
 
     # Extract structured JSON from function_call
+    return _parse_response(response)
+
+
+def generate_keywords_category(content):
+    """Derive `keywordauto` (5-10 terms) and `categoryauto` (one) from raw content text.
+
+    `content` is a plain string — article body, HTML or plain text, in any
+    language. Returns (result_dict, token_usage) where result_dict follows
+    KeywordCategorySchema.
+    """
+    content = (content or "").strip()
+    if not content:
+        raise ValueError("content must not be empty")
+
+    client = _client()
+
+    system_instruction = """
+    # System Prompt: Keywords + Category from a piece of content
+
+    ## Role
+    News desk metadata editor. Read one piece of content and output the search keywords and the
+    single section category it would be filed under. Nothing else — no summary, no rewrite.
+
+    ## Language
+    Write both `keywordauto` and `categoryauto` in the **same language as the content**. If the
+    content is Indonesian, output Indonesian terms; if English, English terms. Never mix the two.
+
+    ## `keywordauto` — 5 to 10 terms, calibrated specificity
+    These are the terms a reader would actually type into search to find this exact story. Aim for
+    the middle band between too general and too niche:
+    - **Too general (reject)** — a term that would match thousands of unrelated stories and says
+    nothing about this one: "news", "Indonesia", "government", "viral", "today", "information",
+    a bare year.
+    - **Too niche (reject)** — a term so specific to one sentence that nobody would search it: a
+    full quote, a long clause, a document/case number, an exact street address, a precise figure
+    ("Rp 1.237.450"), a minor person mentioned once in passing.
+    - **The right band (keep)** — the story's central actors, institutions, places, events, objects
+    and issues, as a searcher would name them: a named person at the centre of the story, the
+    institution or company involved, the city/region, the event or policy, the concrete topic.
+    Two to four words each is typical; single common nouns are usually too general.
+
+    Rules:
+    1. **Only from the content** — every keyword must be grounded in what the text actually says.
+    Never invent a name, place, or topic the content does not carry.
+    2. **No duplication** — no two keywords that are the same term, a plural/singular pair, or one
+    fully contained in another ("Prabowo" and "Prabowo Subianto" — keep the more searchable one).
+    3. **Order by centrality** — most central to the story first.
+    4. **No hashtags, no punctuation-as-syntax, no ALL CAPS** (beyond genuine acronyms), no quotes
+    around terms. Keep each term's natural capitalization: proper nouns capitalized, common nouns
+    lowercase.
+    5. **Acronyms** — use the form the content uses; if it gives both ("Kereta Cepat Indonesia
+    China (KCIC)"), the widely-searched short form is the better keyword.
+
+    ## `categoryauto` — exactly one
+    The single desk/section this content belongs to, lowercase. Pick the one that fits best from
+    this taxonomy, translated into the content's language:
+    news, politics, law and crime, economy and business, finance, sports, entertainment,
+    technology, automotive, lifestyle, health, education, travel, food, science, environment,
+    religion, world.
+    If none fits, use the closest short section name the content clearly supports — never invent a
+    narrow one-off category, and never return more than one.
+
+    ## Before finalizing, check:
+    - Between 5 and 10 keywords, all in the content's language, none of them a term that would
+    match any random news story, none of them a phrase nobody would search.
+    - Every keyword traces to something the content actually states.
+    - No keyword repeats or contains another.
+    - `categoryauto` is one lowercase section name, not a list, not a keyword restated.
+    """
+
+    prompt_input = f"""
+    Below is the content. Output only its keywords and category.
+
+    Content: {content}"""
+
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": prompt_input},
+    ]
+    response = client.responses.parse(
+        model=OPENROUTER_MODEL,
+        temperature=OPENROUTER_TEMPERATURE,
+        input=messages,
+        text_format=KeywordCategorySchema,
+        reasoning=Reasoning(effort=OPENROUTER_REASONING_EFFORT),
+        extra_body={"usage": {"include": True}},
+    )
+
     return _parse_response(response)
