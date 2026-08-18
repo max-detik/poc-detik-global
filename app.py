@@ -1,13 +1,14 @@
 """Small stdlib web server for previewing an article and generating its
 English rewrite side by side.
 
-Input is a pasted detik.com article URL, scraped on demand.
-Nothing here calls apis.detik.com.
+Input is one to five pasted detik.com article URLs, scraped on demand. The first
+one is the main article (anchor); the rest only enrich it, and the output keeps
+the same fields either way. Nothing here calls apis.detik.com.
 
 Reuses the existing scripts:
-  - scraper.py          -> scrape_article()     (detik.com URL -> article dict)
-  - generate_articles.py-> build_news_input()   (article -> prompt input)
-  - prompt.py           -> generate_news_single()(OpenRouter call)
+  - scraper.py          -> scrape_article()       (detik.com URL -> article dict)
+  - generate_articles.py-> generate_from_articles()(articles -> generated article)
+  - prompt.py           -> generate_news_single() / generate_news_multi()
 
 The whole site sits behind HTTP Basic auth; credentials come from BASIC_AUTH_USER
 and BASIC_AUTH_PASS in .env (Railway: set them as service variables).
@@ -38,8 +39,8 @@ AUTH_REALM = "detikGlobal"
 # prompt.py / generate_articles.py import each other by bare module name.
 sys.path.insert(0, str(BASE_DIR))
 
-from generate_articles import build_news_input  # noqa: E402
-from prompt import generate_news_single  # noqa: E402
+from generate_articles import generate_from_articles  # noqa: E402
+from prompt import MAX_SOURCE_ARTICLES  # noqa: E402
 from scraper import ScrapeError, scrape_article  # noqa: E402
 
 
@@ -131,20 +132,29 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return self._send_json(400, {"error": "invalid JSON body"})
 
-        article = payload.get("article")
-        url = str(payload.get("url") or "").strip()
+        # The first entry is the main article (anchor); the rest only enrich it.
+        # `article`/`url` (singular) stay accepted for older callers.
+        articles = payload.get("articles") or ([payload["article"]] if payload.get("article") else [])
+        urls = payload.get("urls") or []
+        if not urls and payload.get("url"):
+            urls = [payload["url"]]
 
-        if not article and url:
-            try:
-                article = scrape_article(url)
-            except ScrapeError as e:
-                return self._send_json(400, {"error": str(e)})
+        if not articles:
+            for url in urls:
+                try:
+                    articles.append(scrape_article(str(url).strip()))
+                except ScrapeError as e:
+                    return self._send_json(400, {"error": str(e)})
 
-        if not article:
+        if not articles:
             return self._send_json(400, {"error": "provide an article or a detik.com url"})
+        if len(articles) > MAX_SOURCE_ARTICLES:
+            return self._send_json(
+                400, {"error": f"at most {MAX_SOURCE_ARTICLES} articles are supported"}
+            )
 
         try:
-            generated, usage = generate_news_single(build_news_input(article))
+            generated, usage = generate_from_articles(articles)
         except Exception as e:
             traceback.print_exc()
             return self._send_json(502, {"error": f"{type(e).__name__}: {e}"})

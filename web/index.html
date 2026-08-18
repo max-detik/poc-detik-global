@@ -44,6 +44,16 @@
   .preset:has(input:checked) .dot::after{transform:scale(1);}
   .preset:has(input:focus-visible){outline:2px solid #c7d4f2;outline-offset:2px;}
   .preset:has(input:disabled){opacity:.55;cursor:not-allowed;}
+  .urls{display:flex;flex-direction:column;gap:8px;width:100%;max-width:900px;}
+  .url-row{display:flex;align-items:center;gap:10px;width:100%;}
+  .url-row input{flex:1 1 auto;min-width:200px;max-width:none;font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;}
+  .url-row input:focus{outline:2px solid #c7d4f2;border-color:var(--blue);}
+  .flag{flex:0 0 auto;width:132px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 8px;border-radius:3px;text-align:center;}
+  .flag-main{background:var(--navy);color:#fff;}
+  .flag-extra{background:#e8edfb;color:var(--blue);}
+  .url-row .remove{flex:0 0 auto;padding:6px 10px;color:var(--red);border-color:var(--border);line-height:1;}
+  .url-row .remove:hover:not(:disabled){background:#fdecea;}
+  .hint{font-size:12px;color:var(--muted);}
   button{font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--blue);cursor:pointer;}
   button:hover:not(:disabled){background:#eef2fb;}
   button.primary{background:var(--navy);border-color:var(--navy);color:#fff;}
@@ -55,12 +65,28 @@
   main{flex:1 1 auto;overflow-y:auto;padding:24px;}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1400px;margin:0 auto;align-items:start;}
   @media (max-width:900px){ .cols{grid-template-columns:1fr;} }
+  .stack{display:flex;flex-direction:column;gap:16px;}
   .col{border:1px solid var(--border);border-radius:8px;padding:16px;background:#fff;}
   .col.placeholder{display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--muted);font-style:italic;text-align:center;}
   .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:3px;margin-bottom:10px;}
   .badge-orig{background:#fdecea;color:var(--red);}
   .badge-gen{background:#e8edfb;color:var(--blue);}
   .col h2{font-size:18px;margin:0 0 8px;line-height:1.3;}
+
+  /* Source previews are accordions: header always visible, body collapsible. */
+  .acc{padding:0;}
+  .acc>summary{list-style:none;cursor:pointer;display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-radius:8px;}
+  .acc>summary::-webkit-details-marker{display:none;}
+  .acc>summary:hover{background:#fbfcff;}
+  .acc>summary:focus-visible{outline:2px solid #c7d4f2;outline-offset:-2px;}
+  .acc[open]>summary{border-bottom:1px solid var(--border);border-radius:8px 8px 0 0;}
+  .acc .chevron{flex:0 0 auto;width:8px;height:8px;margin-top:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;}
+  .acc[open] .chevron{transform:rotate(45deg);}
+  .acc-head{display:block;min-width:0;}
+  .acc .badge{margin-bottom:6px;}
+  .acc-title{display:block;font-size:16px;font-weight:600;line-height:1.35;}
+  .acc-body{padding:14px 16px 16px;}
+  .acc-body .summary{margin-top:0;}
   .summary{color:var(--muted);font-size:14px;margin:0 0 10px;}
   .meta{font-size:12px;color:var(--muted);margin-bottom:6px;word-break:break-word;}
   .metadata{margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);}
@@ -79,7 +105,7 @@
 <body>
 <header>
   <h1>detikGlobal — Generate New Article</h1>
-  <p>Paste a detik.com article URL. The Indonesian source is scraped and its English rewrite generated, side by side.</p>
+  <p>Paste up to 5 detik.com article URLs. The first is the main article (anchor) — it sets the story, angle and structure; the rest only add supporting facts. The Indonesian sources are scraped and one English article generated, side by side.</p>
 </header>
 
 <div class="toolbar">
@@ -89,8 +115,11 @@
   </div>
 
   <div class="panel active" id="panel-input" role="tabpanel">
-    <label for="articleUrl">detik.com URL</label>
-    <input id="articleUrl" type="url" placeholder="https://finance.detik.com/…/d-8615053/…" autocomplete="off" spellcheck="false">
+    <div class="urls" id="urlRows"></div>
+    <div class="row">
+      <button id="addUrlBtn" type="button">+ Add article</button>
+      <span class="hint" id="urlHint"></span>
+    </div>
   </div>
 
   <div class="panel" id="panel-preset" role="tabpanel">
@@ -126,8 +155,10 @@
 </main>
 
 <script>
+const MAX_ARTICLES = 5;
 const $ = (id) => document.getElementById(id);
-const generateBtn = $("generateBtn"), urlInput = $("articleUrl");
+const generateBtn = $("generateBtn"), addUrlBtn = $("addUrlBtn");
+const urlRows = $("urlRows"), urlHint = $("urlHint");
 const statusEl = $("status"), origCol = $("origCol"), genCol = $("genCol");
 const tabs = document.querySelectorAll(".tab");
 let activeTab = "input";
@@ -143,13 +174,59 @@ tabs.forEach((tab) => tab.addEventListener("click", () => {
   });
 }));
 
-function selectedUrl() {
+// ----- URL rows: row 0 is the main article (anchor), rows 1..4 are supporting.
+function addUrlRow(value) {
+  if (urlRows.children.length >= MAX_ARTICLES) return;
+  const row = document.createElement("div");
+  row.className = "url-row";
+  row.innerHTML = `
+    <span class="flag"></span>
+    <input type="url" autocomplete="off" spellcheck="false">
+    <button class="remove" type="button" title="Remove this article" aria-label="Remove this article">&times;</button>`;
+  row.querySelector("input").value = value || "";
+  row.querySelector(".remove").addEventListener("click", () => {
+    if (generateBtn.disabled) return;
+    row.remove();
+    refreshUrlRows();
+  });
+  urlRows.append(row);
+  refreshUrlRows();
+  row.querySelector("input").focus();
+}
+
+function refreshUrlRows() {
+  const rows = [...urlRows.children];
+  rows.forEach((row, i) => {
+    const main = i === 0;
+    const flag = row.querySelector(".flag");
+    flag.className = "flag " + (main ? "flag-main" : "flag-extra");
+    flag.textContent = main ? "Main article" : `Supporting ${i + 1}`;
+    const input = row.querySelector("input");
+    input.placeholder = main
+      ? "https://finance.detik.com/…/d-8615053/…  (anchor — sets the story)"
+      : "https://…detik.com/…  (optional supporting source)";
+    // The anchor is required, so it has no remove button.
+    row.querySelector(".remove").hidden = main;
+  });
+  addUrlBtn.disabled = generateBtn.disabled || rows.length >= MAX_ARTICLES;
+  urlHint.textContent =
+    rows.length >= MAX_ARTICLES
+      ? `Maximum of ${MAX_ARTICLES} articles reached.`
+      : `${rows.length} of ${MAX_ARTICLES} articles.`;
+}
+
+function selectedUrls() {
   if (activeTab === "preset") {
     const picked = document.querySelector('input[name="presetUrl"]:checked');
-    return picked ? picked.value : "";
+    return picked ? [picked.value] : [];
   }
-  return urlInput.value.trim();
+  // Blank supporting rows are simply ignored; order is preserved, so the first
+  // filled row stays the anchor.
+  return [...urlRows.querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean);
 }
+
+addUrlBtn.addEventListener("click", () => addUrlRow(""));
+addUrlRow("");
 
 function setStatus(msg, isError, busy) {
   statusEl.className = "status" + (isError ? " error" : "");
@@ -180,12 +257,20 @@ function tagList(value) {
   return String(value ?? "").split("|").filter(Boolean).join(", ");
 }
 
-function renderOriginal(a) {
+function originalCard(a, index, total, open) {
   const cover = a.image_cover || {};
-  origCol.className = "col orig";
-  origCol.innerHTML = `
-    <div class="badge badge-orig">Input — Original (ID)${a.source_url ? " · scraped" : ""}</div>
-    <h2>${esc(a.title)}</h2>
+  const main = index === 0;
+  const role = total > 1 ? (main ? " · main article" : ` · supporting ${index + 1}`) : "";
+  return `
+    <details class="col orig acc"${open ? " open" : ""}>
+    <summary>
+      <span class="chevron" aria-hidden="true"></span>
+      <span class="acc-head">
+        <span class="badge badge-orig">Input — Original (ID)${a.source_url ? " · scraped" : ""}${role}</span>
+        <span class="acc-title">${esc(a.title)}</span>
+      </span>
+    </summary>
+    <div class="acc-body">
     <p class="summary">${esc(a.resume)}</p>
     <div class="content">${decodeContent(a.content)}</div>
     <div class="metadata">
@@ -194,7 +279,22 @@ function renderOriginal(a) {
       <div class="meta"><b>Keywords:</b> ${esc(tagList(a.keywordauto)) || "&mdash;"}</div>
       <div class="meta"><b>Image caption:</b> ${esc(cover.text) || "&mdash;"}</div>
       <div class="meta"><b>Alt image:</b> ${esc(cover.alt_image) || "&mdash;"}</div>
-    </div>`;
+    </div>
+    </div>
+    </details>`;
+}
+
+// Which source panels are expanded, by index. Sources are re-rendered after each
+// scrape, so the reader's open/closed choices have to survive the re-render.
+let origOpen = [];
+
+function renderOriginals(articles) {
+  [...origCol.querySelectorAll("details")].forEach((d, i) => { origOpen[i] = d.open; });
+  origCol.className = "stack";
+  origCol.innerHTML = articles
+    // The main article starts expanded; supporting sources start collapsed.
+    .map((a, i) => originalCard(a, i, articles.length, origOpen[i] ?? i === 0))
+    .join("");
 }
 
 function renderGenerated(g, usage) {
@@ -226,37 +326,46 @@ async function api(url, options) {
 
 function setBusy(busy) {
   generateBtn.disabled = busy;
-  urlInput.disabled = busy;
+  urlRows.querySelectorAll("input, button").forEach((el) => { el.disabled = busy; });
   document.querySelectorAll('input[name="presetUrl"]').forEach((r) => { r.disabled = busy; });
+  addUrlBtn.disabled = busy || urlRows.children.length >= MAX_ARTICLES;
 }
 
-// Scrape first so the source shows immediately, then generate the rewrite.
+// Scrape every source first so they show immediately, then generate one rewrite.
 async function generateNewArticle() {
-  const url = selectedUrl();
-  if (!url) return setStatus(activeTab === "preset" ? "Pick one of the sample articles first." : "Paste a detik.com article URL first.", true, false);
+  const urls = selectedUrls();
+  if (!urls.length) return setStatus(activeTab === "preset" ? "Pick one of the sample articles first." : "Paste a detik.com article URL first.", true, false);
 
   setBusy(true);
-  setStatus("Scraping detik.com…", false, true);
-  placeholder(origCol, "Scraping…");
   placeholder(genCol, "Generated English output will appear here.");
+  placeholder(origCol, "Scraping…");
+  origOpen = [];
 
-  let article;
-  try {
-    ({ article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`));
-    renderOriginal(article);
-  } catch (e) {
-    placeholder(origCol, "Could not scrape this URL.");
-    setStatus(e.message, true, false);
-    return setBusy(false);
+  const articles = [];
+  for (const [i, url] of urls.entries()) {
+    setStatus(`Scraping detik.com… (${i + 1}/${urls.length})`, false, true);
+    try {
+      const { article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`);
+      articles.push(article);
+      renderOriginals(articles);
+    } catch (e) {
+      placeholder(origCol, `Could not scrape ${i === 0 ? "the main article" : "article " + (i + 1)}.`);
+      setStatus(e.message, true, false);
+      return setBusy(false);
+    }
   }
 
-  setStatus("Generating English rewrite… this can take a while.", false, true);
+  setStatus(
+    articles.length > 1
+      ? `Generating English rewrite from ${articles.length} sources… this can take a while.`
+      : "Generating English rewrite… this can take a while.",
+    false, true);
   placeholder(genCol, "Generating…");
   try {
     const { generated, usage } = await api("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ article }),
+      body: JSON.stringify({ articles }),
     });
     renderGenerated(generated, usage);
     setStatus("Done.", false, false);
@@ -269,7 +378,9 @@ async function generateNewArticle() {
 }
 
 generateBtn.addEventListener("click", generateNewArticle);
-urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") generateNewArticle(); });
+urlRows.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches("input")) generateNewArticle();
+});
 </script>
 </body>
 </html>
