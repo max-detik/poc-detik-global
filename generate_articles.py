@@ -4,8 +4,8 @@ from pathlib import Path
 
 from prompt import MAX_SOURCE_ARTICLES, generate_news_multi
 
-INPUT_PATH = Path(__file__).parent / "input/apis-data_2.json"
-OUTPUT_PATH = Path(__file__).parent / "output/generated-articles_2.json"
+INPUT_PATH = Path(__file__).parent / "input/apis-data-all.json"
+OUTPUT_PATH = Path(__file__).parent / "output/generated-articles-all.json"
 MAX_ATTEMPTS = 3
 
 
@@ -90,7 +90,7 @@ def main():
 
     results = []
     cost_tracker = {"total_cost": 0.0, "total_tokens": 0}
-    for i, article in enumerate(articles, start=1):
+    for i, article in enumerate(articles[:2], start=1):
         print(f"[{i}/{len(articles)}] Generating: {article.get('title', '')!r}")
         news = build_news_input(article)
         generated = generate_multi_with_retries([news], cost_tracker)
