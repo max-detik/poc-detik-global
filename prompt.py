@@ -1,10 +1,13 @@
+import csv
 import json
 import os
+from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from openai.types.shared_params import Reasoning
-from pydantic import BaseModel, Field, conlist
+from pydantic import BaseModel, Field, conlist, create_model
 from typing import List
 from typing import Literal
 
@@ -29,14 +32,52 @@ class ArticleSchema(BaseModel):
     image_cover_image_text: str = Field(..., description="rewritten caption of the image cover")
     image_cover_alt_image: str = Field(..., description="rewritten alt text of the image cover")
 
-class KeywordCategorySchema(BaseModel):
-    keywordauto: List[str] = Field(
-        min_length=5, max_length=10, description="search keywords describing the content"
-    )
-    categoryauto: str = Field(..., description="single news category of the content")
-
-
 MAX_SOURCE_ARTICLES = 5
+
+# The allowed `categoryauto` labels and what each one covers, maintained by the
+# desk as a CSV of "Leaf,Deskripsi" rows.
+CATEGORY_LABELS_PATH = Path(__file__).parent / "input/categoryauto_labelling.csv"
+
+
+def _clean_description(text):
+    """One-line description; the CSV lists sub-items on their own lines."""
+    lines = [" ".join(line.split()) for line in (text or "").splitlines()]
+    return "; ".join(line for line in lines if line)
+
+
+@lru_cache(maxsize=1)
+def _category_labels():
+    """[(leaf, description)] from the labelling CSV, in file order."""
+    with open(CATEGORY_LABELS_PATH, "r", encoding="utf-8-sig", newline="") as f:
+        rows = [
+            (row["Leaf"].strip(), _clean_description(row.get("Deskripsi")))
+            for row in csv.DictReader(f)
+            if (row.get("Leaf") or "").strip()
+        ]
+    if not rows:
+        raise ValueError(f"no category labels found in {CATEGORY_LABELS_PATH}")
+    return rows
+
+
+@lru_cache(maxsize=1)
+def _keyword_category_schema():
+    """KeywordCategorySchema with `categoryauto` restricted to the CSV's leaves.
+
+    Built at call time so the allowed values always come from the CSV on disk,
+    and so importing this module doesn't require the file to be present.
+    """
+    leaves = tuple(leaf for leaf, _ in _category_labels())
+    return create_model(
+        "KeywordCategorySchema",
+        keywordauto=(
+            List[str],
+            Field(min_length=5, max_length=10, description="search keywords describing the content"),
+        ),
+        categoryauto=(
+            Literal[leaves],  # type: ignore[valid-type]
+            Field(..., description="single news category, exactly one label from the taxonomy"),
+        ),
+    )
 
 
 def _client():
@@ -314,12 +355,17 @@ def generate_news_multi(news_items):
     return _parse_response(response)
 
 
+def _format_category_labels():
+    return "\n".join(f"    - {leaf} — {desc}" for leaf, desc in _category_labels())
+
+
 def generate_keywords_category(content):
     """Derive `keywordauto` (5-10 terms) and `categoryauto` (one) from raw content text.
 
     `content` is a plain string — article body, HTML or plain text, in any
-    language. Returns (result_dict, token_usage) where result_dict follows
-    KeywordCategorySchema.
+    language. `categoryauto` is always one of the labels in
+    input/categoryauto_labelling.csv, enforced both in the prompt and by the
+    response schema. Returns (result_dict, token_usage).
     """
     content = (content or "").strip()
     if not content:
@@ -335,8 +381,10 @@ def generate_keywords_category(content):
     single section category it would be filed under. Nothing else — no summary, no rewrite.
 
     ## Language
-    Write both `keywordauto` and `categoryauto` in the **same language as the content**. If the
-    content is Indonesian, output Indonesian terms; if English, English terms. Never mix the two.
+    Write `keywordauto` in the **same language as the content**. If the content is Indonesian,
+    output Indonesian terms; if English, English terms. Never mix the two. `categoryauto` is the
+    exception: it is always one of the fixed labels listed below, copied exactly as written there,
+    whatever the content's language.
 
     ## `keywordauto` — 5 to 10 terms, calibrated specificity
     These are the terms a reader would actually type into search to find this exact story. Aim for
@@ -364,22 +412,29 @@ def generate_keywords_category(content):
     5. **Acronyms** — use the form the content uses; if it gives both ("Kereta Cepat Indonesia
     China (KCIC)"), the widely-searched short form is the better keyword.
 
-    ## `categoryauto` — exactly one
-    The single desk/section this content belongs to, lowercase. Pick the one that fits best from
-    this taxonomy, translated into the content's language:
-    news, politics, law and crime, economy and business, finance, sports, entertainment,
-    technology, automotive, lifestyle, health, education, travel, food, science, environment,
-    religion, world.
-    If none fits, use the closest short section name the content clearly supports — never invent a
-    narrow one-off category, and never return more than one.
+    ## `categoryauto` — exactly one label from the taxonomy
+    Choose the single label whose description best matches what this content is actually about.
+    - **Copy the label verbatim** — exact spelling, spacing and capitalization as listed. Never
+    translate it, never reword it, never invent one that isn't on the list, never return two.
+    - **Decide by description, not by label wording** — a label's description states what it
+    includes, and several descriptions carry explicit exclusions ("excl. ...", "selain ...").
+    Honour those: a story the description excludes does not belong to that label.
+    - **The story's main subject decides**, not a term mentioned in passing. If the content touches
+    several labels, pick the one the bulk of the reporting serves.
+    - When nothing fits well, use the matching **"... Lainnya"** (other) label of the closest
+    section rather than forcing a specific one.
+
+    ### Allowed labels (`Label` — what it covers)
+{category_list}
 
     ## Before finalizing, check:
     - Between 5 and 10 keywords, all in the content's language, none of them a term that would
     match any random news story, none of them a phrase nobody would search.
     - Every keyword traces to something the content actually states.
     - No keyword repeats or contains another.
-    - `categoryauto` is one lowercase section name, not a list, not a keyword restated.
-    """
+    - `categoryauto` is exactly one label copied verbatim from the allowed list, not a translation,
+    not a list, not a keyword restated, and not excluded by that label's own description.
+    """.replace("{category_list}", _format_category_labels())
 
     prompt_input = f"""
     Below is the content. Output only its keywords and category.
@@ -394,7 +449,7 @@ def generate_keywords_category(content):
         model=OPENROUTER_MODEL,
         temperature=OPENROUTER_TEMPERATURE,
         input=messages,
-        text_format=KeywordCategorySchema,
+        text_format=_keyword_category_schema(),
         reasoning=Reasoning(effort=OPENROUTER_REASONING_EFFORT),
         extra_body={"usage": {"include": True}},
     )
