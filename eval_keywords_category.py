@@ -1,19 +1,26 @@
-"""Evaluate generate_keywords_category() against the labelled sample data.
+"""Evaluate generate_keywords_category() against labelled sample data.
 
-Runs the function over input/apis-data-all.json and scores its output against
-each article's own `categoryauto` / `keywordauto`:
+Runs the function over a labelled dataset and scores its output:
+
+  input/apis-data-all.json   — `content` in, scored against `categoryauto` and
+                               `keywordauto`.
+  input/test_catauto.csv     — the `text` column in, scored against the
+                               `category` column. Category only; the file carries
+                               no gold keywords, so keyword metrics are skipped.
+
+Metrics:
 
   category  — single-label multiclass: accuracy plus per-class and macro/weighted
               precision, recall, F1.
   keywords  — multi-label set comparison per article: micro (pooled TP/FP/FN) and
               macro (mean of per-article scores), under exact and partial matching.
 
-Only the article's `content` is sent to the model — the same contract the
-function has in production. Gold labels are normalized (lowercased, whitespace
-collapsed) before comparison, so the CSV's "Kisah Inspiratif" matches the data's
-"kisah inspiratif".
+Only the article text is sent to the model — the same contract the function has
+in production. Category labels are compared on a loosened key (lowercased,
+punctuation and spacing dropped), so "Kisah Inspiratif" matches "kisah
+inspiratif" and "Musik K-pop" matches "musik kpop".
 
-Run:  python eval_keywords_category.py [--limit N] [--workers N] [--out FILE]
+Run:  python eval_keywords_category.py [--input FILE] [--limit N] [--workers N]
 """
 
 import argparse
@@ -41,11 +48,20 @@ def _norm(text):
     return " ".join((text or "").split()).lower()
 
 
-def _gold_keywords(article):
+def _loose(text):
+    """Category matching key: letters and digits only.
+
+    The datasets spell the same label several ways ("Musik K-pop" / "musik kpop",
+    "Fashion Syar'i" / "fashion syari", "E-sport" / "esport"), and those are the
+    same class, not a miss.
+    """
+    return "".join(c for c in _norm(text) if c.isalnum())
+
+
+def _split_keywords(raw):
     """The pipe-separated `keywordauto` as a de-duplicated, normalized list."""
-    raw = article.get("keywordauto") or ""
     seen, out = set(), []
-    for part in raw.split("|"):
+    for part in (raw or "").split("|"):
         key = _norm(part)
         if key and key not in seen:
             seen.add(key)
@@ -61,6 +77,79 @@ def _dedupe(terms):
             seen.add(key)
             out.append(key)
     return out
+
+
+# ---------- input ----------
+
+def load_records(path):
+    """Normalized evaluation records from a JSON or CSV dataset.
+
+    Each record: id, title, content, gold_category, gold_keywords (None when the
+    dataset carries no keyword labels).
+    """
+    if path.suffix.lower() == ".csv":
+        return _records_from_csv(path)
+    return _records_from_json(path)
+
+
+def _records_from_json(path):
+    """input/apis-data-all.json: `content`, `categoryauto`, `keywordauto`."""
+    with open(path, "r", encoding="utf-8") as f:
+        articles = json.load(f)
+    return [
+        {
+            "id": article.get("id"),
+            "title": article.get("title", ""),
+            "content": article.get("content", ""),
+            "gold_category": _norm(article.get("categoryauto")),
+            "gold_keywords": _split_keywords(article.get("keywordauto")),
+        }
+        for article in articles
+    ]
+
+
+def _records_from_csv(path):
+    """input/test_catauto.csv: `text` is the content, `category` is the label.
+
+    No keyword column, so gold_keywords is None and keyword metrics are skipped.
+    Rows without text, or whose category is blank/"nan", are dropped — an unlabelled
+    row cannot be scored. A few articles appear twice under one `original_id` with
+    identical text (two `chunk_order` rows); only the first is kept, so the article
+    is neither generated nor counted twice.
+    """
+    # Article bodies run past the default 128 KB field cap.
+    csv.field_size_limit(sys.maxsize)
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        missing = {"text", "category"} - set(reader.fieldnames or [])
+        if missing:
+            raise SystemExit(
+                f"{path} is missing required column(s): {', '.join(sorted(missing))}"
+            )
+        records, skipped, duplicates, seen = [], 0, 0, set()
+        for i, row in enumerate(reader):
+            content = (row.get("text") or "").strip()
+            category = _norm(row.get("category"))
+            if not content or category in ("", "nan"):
+                skipped += 1
+                continue
+            record_id = row.get("original_id") or row.get("") or str(i)
+            if record_id in seen:
+                duplicates += 1
+                continue
+            seen.add(record_id)
+            records.append({
+                "id": record_id,
+                "title": (row.get("title") or "").strip(),
+                "content": content,
+                "gold_category": category,
+                "gold_keywords": None,
+            })
+    if skipped:
+        print(f"  skipped {skipped} row(s) with no text or no category label")
+    if duplicates:
+        print(f"  skipped {duplicates} duplicate row(s) sharing an original_id")
+    return records
 
 
 # ---------- scoring ----------
@@ -105,7 +194,7 @@ def category_metrics(pairs):
     """Per-class + macro/weighted P/R/F1 over (gold, predicted) label pairs."""
     counts = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
     for gold, predicted in pairs:
-        if gold == predicted:
+        if _loose(gold) == _loose(predicted):
             counts[gold]["tp"] += 1
         else:
             counts[gold]["fn"] += 1
@@ -146,16 +235,16 @@ def keyword_metrics(per_article):
 
 # ---------- run ----------
 
-def evaluate_article(article):
-    """Generate for one article and score it. Errors are captured, not raised."""
+def evaluate_article(record):
+    """Generate for one record and score it. Errors are captured, not raised."""
     result = {
-        "id": article.get("id"),
-        "title": article.get("title", ""),
-        "gold_category": _norm(article.get("categoryauto")),
-        "gold_keywords": _gold_keywords(article),
+        "id": record["id"],
+        "title": record["title"],
+        "gold_category": record["gold_category"],
+        "gold_keywords": record["gold_keywords"],
     }
     try:
-        generated, usage = generate_keywords_category(article.get("content", ""))
+        generated, usage = generate_keywords_category(record["content"])
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
         return result
@@ -164,21 +253,25 @@ def evaluate_article(article):
     result["predicted_keywords"] = _dedupe(generated.get("keywordauto") or [])
     result["usage"] = usage
 
-    for mode in ("exact", "partial"):
-        tp, fp, fn = score_keyword_sets(
-            result["predicted_keywords"], result["gold_keywords"], partial=(mode == "partial")
-        )
-        result[f"keywords_{mode}"] = {"tp": tp, "fp": fp, "fn": fn, **_prf(tp, fp, fn)}
+    if record["gold_keywords"] is not None:
+        for mode in ("exact", "partial"):
+            tp, fp, fn = score_keyword_sets(
+                result["predicted_keywords"], record["gold_keywords"], partial=(mode == "partial")
+            )
+            result[f"keywords_{mode}"] = {"tp": tp, "fp": fp, "fn": fn, **_prf(tp, fp, fn)}
     return result
 
 
 def summarize(results):
-    known_labels = {_norm(leaf) for leaf, _ in _category_labels()}
+    known_labels = {_loose(leaf) for leaf, _ in _category_labels()}
     scored = [r for r in results if "error" not in r]
     # A gold label absent from the taxonomy can never be predicted, so scoring it
     # would only measure the label file's coverage. Reported separately instead.
-    in_taxonomy = [r for r in scored if r["gold_category"] in known_labels]
-    off_taxonomy = sorted({r["gold_category"] for r in scored} - known_labels)
+    in_taxonomy = [r for r in scored if _loose(r["gold_category"]) in known_labels]
+    off_taxonomy = sorted(
+        {r["gold_category"] for r in scored if _loose(r["gold_category"]) not in known_labels}
+    )
+    with_keywords = [r for r in scored if r.get("keywords_exact")]
 
     summary = {
         "articles": len(results),
@@ -192,8 +285,11 @@ def summarize(results):
             ),
         },
         "keywords": {
-            mode: keyword_metrics([r[f"keywords_{mode}"] for r in scored])
-            for mode in ("exact", "partial")
+            "scored": len(with_keywords),
+            **{
+                mode: keyword_metrics([r[f"keywords_{mode}"] for r in with_keywords])
+                for mode in ("exact", "partial")
+            },
         },
         "usage": _usage_totals(scored),
     }
@@ -234,24 +330,29 @@ def print_report(summary, results):
               f"{_pct(m['f1']):>8}")
 
     print("\n=== KEYWORDS ===")
-    print(f"{'':34}{'prec':>7}{'rec':>8}{'f1':>8}")
-    for mode in ("exact", "partial"):
-        for avg in ("micro", "macro"):
-            m = summary["keywords"][mode][avg]
-            print(f"  {mode + ' / ' + avg:32}{_pct(m['precision']):>7}{_pct(m['recall']):>8}"
-                  f"{_pct(m['f1']):>8}")
+    if not summary["keywords"]["scored"]:
+        print("  no gold keywords in this dataset — skipped")
+    else:
+        print(f"{'':34}{'prec':>7}{'rec':>8}{'f1':>8}")
+        for mode in ("exact", "partial"):
+            for avg in ("micro", "macro"):
+                m = summary["keywords"][mode][avg]
+                print(f"  {mode + ' / ' + avg:32}{_pct(m['precision']):>7}{_pct(m['recall']):>8}"
+                      f"{_pct(m['f1']):>8}")
 
     print("\n=== PER ARTICLE ===")
     for r in results:
         if "error" in r:
             print(f"  [{r['id']}] ERROR {r['error']}")
             continue
-        hit = "OK " if r["gold_category"] == r["predicted_category"] else "MISS"
+        hit = "OK " if _loose(r["gold_category"]) == _loose(r["predicted_category"]) else "MISS"
         usage = r.get("usage") or {}
+        keywords = ""
+        if r.get("keywords_exact"):
+            keywords = (f"  keywords f1 exact {_pct(r['keywords_exact']['f1'])} / "
+                        f"partial {_pct(r['keywords_partial']['f1'])}")
         print(f"  [{r['id']}] {hit} category: {r['predicted_category']!r} "
-              f"(gold {r['gold_category']!r})  keywords f1 "
-              f"exact {_pct(r['keywords_exact']['f1'])} / "
-              f"partial {_pct(r['keywords_partial']['f1'])}  "
+              f"(gold {r['gold_category']!r}){keywords}  "
               f"{usage.get('total_tokens') or 0} tok, ${usage.get('cost') or 0.0:.6f}")
 
     u = summary["usage"]
@@ -277,13 +378,19 @@ def write_category_csv(results, path):
                 r.get("title", ""),
                 r.get("gold_category", ""),
                 r.get("error") or predicted,
-                "" if r.get("error") else ("1" if predicted == r.get("gold_category") else "0"),
+                "" if r.get("error")
+                else ("1" if _loose(predicted) == _loose(r.get("gold_category")) else "0"),
             ])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=INPUT_PATH)
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=INPUT_PATH,
+        help="JSON dataset (content/categoryauto/keywordauto) or CSV (text/category)",
+    )
     parser.add_argument("--out", type=Path, default=OUTPUT_PATH)
     parser.add_argument(
         "--out-csv",
@@ -295,14 +402,13 @@ def main():
     parser.add_argument("--workers", type=int, default=4, help="parallel generations")
     args = parser.parse_args()
 
-    with open(args.input, "r", encoding="utf-8") as f:
-        articles = json.load(f)
+    records = load_records(args.input)
     if args.limit:
-        articles = articles[: args.limit]
+        records = records[: args.limit]
 
-    print(f"Evaluating {len(articles)} article(s) from {args.input} ...", flush=True)
+    print(f"Evaluating {len(records)} article(s) from {args.input} ...", flush=True)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        results = list(pool.map(evaluate_article, articles))
+        results = list(pool.map(evaluate_article, records))
 
     summary = summarize(results)
     print_report(summary, results)
