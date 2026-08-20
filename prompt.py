@@ -34,6 +34,9 @@ class ArticleSchema(BaseModel):
 
 MAX_SOURCE_ARTICLES = 5
 
+# How many ranked category labels generate_keywords_category() returns.
+CATEGORY_CHOICES = 3
+
 # System prompts live as plain text next to the code so they can be edited and
 # diffed without touching Python.
 PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -46,7 +49,8 @@ def _load_prompt(name):
 
 
 # The allowed `categoryauto` labels and what each one covers, maintained by the
-# desk as a CSV of "Leaf,Deskripsi" rows.
+# desk as a CSV of "level 1, level 2, Leaf, Deskripsi" rows. Generation uses the
+# leaves; the two parent levels are there for reporting and evaluation.
 CATEGORY_LABELS_PATH = Path(__file__).parent / "input/categoryauto_labelling.csv"
 
 
@@ -56,23 +60,48 @@ def _clean_description(text):
     return "; ".join(line for line in lines if line)
 
 
+def _column(row, *names):
+    """Row value by header name, tolerant of case and spacing ("level 1"/"Level1")."""
+    keys = {"".join((k or "").split()).lower(): k for k in row}
+    for name in names:
+        key = keys.get("".join(name.split()).lower())
+        if key is not None:
+            return (row[key] or "").strip()
+    return ""
+
+
 @lru_cache(maxsize=1)
-def _category_labels():
-    """[(leaf, description)] from the labelling CSV, in file order."""
+def category_taxonomy():
+    """[(level1, level2, leaf, description)] from the labelling CSV, in file order."""
     with open(CATEGORY_LABELS_PATH, "r", encoding="utf-8-sig", newline="") as f:
         rows = [
-            (row["Leaf"].strip(), _clean_description(row.get("Deskripsi")))
+            (
+                _column(row, "level 1"),
+                _column(row, "level 2"),
+                _column(row, "Leaf"),
+                _clean_description(_column(row, "Deskripsi")),
+            )
             for row in csv.DictReader(f)
-            if (row.get("Leaf") or "").strip()
         ]
+    rows = [r for r in rows if r[2]]
     if not rows:
         raise ValueError(f"no category labels found in {CATEGORY_LABELS_PATH}")
     return rows
 
 
 @lru_cache(maxsize=1)
+def _category_labels():
+    """[(leaf, description)] — what the prompt offers the model to choose from."""
+    return [(leaf, description) for _, _, leaf, description in category_taxonomy()]
+
+
+@lru_cache(maxsize=1)
 def _keyword_category_schema():
     """KeywordCategorySchema with `categoryauto` restricted to the CSV's leaves.
+
+    `categoryauto` is a ranked list of CATEGORY_CHOICES labels, best fit first —
+    the same shape the production categoriser stores (rank 1..3), so a story that
+    genuinely spans several desks is not forced into one.
 
     Built at call time so the allowed values always come from the CSV on disk,
     and so importing this module doesn't require the file to be present.
@@ -85,8 +114,15 @@ def _keyword_category_schema():
             Field(min_length=5, max_length=10, description="search keywords describing the content"),
         ),
         categoryauto=(
-            Literal[leaves],  # type: ignore[valid-type]
-            Field(..., description="single news category, exactly one label from the taxonomy"),
+            List[Literal[leaves]],  # type: ignore[valid-type]
+            Field(
+                min_length=CATEGORY_CHOICES,
+                max_length=CATEGORY_CHOICES,
+                description=(
+                    f"{CATEGORY_CHOICES} distinct news categories from the taxonomy, "
+                    "ranked best fit first"
+                ),
+            ),
         ),
     )
 
@@ -188,12 +224,12 @@ def _format_category_labels():
 
 
 def generate_keywords_category(content):
-    """Derive `keywordauto` (5-10 terms) and `categoryauto` (one) from raw content text.
+    """Derive `keywordauto` (5-10 terms) and `categoryauto` from raw content text.
 
     `content` is a plain string — article body, HTML or plain text, in any
-    language. `categoryauto` is always one of the labels in
-    input/categoryauto_labelling.csv, enforced both in the prompt and by the
-    response schema. Returns (result_dict, token_usage).
+    language. `categoryauto` is a ranked list of CATEGORY_CHOICES labels, best fit
+    first, each one from input/categoryauto_labelling.csv — enforced both in the
+    prompt and by the response schema. Returns (result_dict, token_usage).
     """
     content = (content or "").strip()
     if not content:
@@ -201,12 +237,14 @@ def generate_keywords_category(content):
 
     client = _client()
 
-    system_instruction = _load_prompt("keywords_category").replace(
-        "{category_list}", _format_category_labels()
+    system_instruction = (
+        _load_prompt("keywords_category")
+        .replace("{category_list}", _format_category_labels())
+        .replace("{category_choices}", str(CATEGORY_CHOICES))
     )
 
     prompt_input = f"""
-    Below is the content. Output only its keywords and category.
+    Below is the content. Output only its keywords and its ranked categories.
 
     Content: {content}"""
 

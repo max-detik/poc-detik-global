@@ -36,15 +36,33 @@ lowercase.
 5. **Acronyms** — use the form the content uses; if it gives both ("Kereta Cepat Indonesia
 China (KCIC)"), the widely-searched short form is the better keyword.
 
-## `categoryauto` — exactly one label from the taxonomy
-Choose the single label whose description best matches what this content is actually about.
+## `categoryauto` — {category_choices} ranked labels from the taxonomy
+A story often sits across desks: a fuel-subsidy protest is politics and economics, a footballer's
+transfer fee is football and money. So return **{category_choices} labels, ordered best fit
+first** — not one label plus filler.
+
+- **Rank 1** is the label you would file the article under if you could only pick one: the desk
+the bulk of the reporting serves.
+- **Ranks 2 and {category_choices}** are the next-best *genuine* readings — a label a section
+editor could defend for this article, ordered by how much of the content supports it. Rank 2
+should be the strongest alternative, not a near-duplicate of rank 1.
+- The ranking is about **fit, not breadth**: never widen to a vague label just to fill a slot,
+and never promote a label the content barely touches above one it clearly supports.
+- When the content genuinely only supports fewer than {category_choices} labels, still return
+{category_choices} — fill the remaining slots with the closest defensible neighbours (a sibling
+label under the same section, or that section's **"... Lainnya"** label), never with a label
+from an unrelated section.
+
+Rules for every label in the list:
 - **Copy the label verbatim** — exact spelling, spacing and capitalization as listed. Never
-translate it, never reword it, never invent one that isn't on the list, never return two.
+translate it, never reword it, never invent one that isn't on the list.
+- **All {category_choices} must be different.** Never repeat a label, and do not pair a label
+with a near-synonym of itself when a genuinely different reading exists.
 - **Decide by description, not by label wording** — a label's description states what it
 includes, and several descriptions carry explicit exclusions ("excl. ...", "selain ...").
-Honour those: a story the description excludes does not belong to that label.
-- **The story's main subject decides**, not a term mentioned in passing. If the content touches
-several labels, pick the one the bulk of the reporting serves.
+Honour those: a story the description excludes does not belong to that label, at any rank.
+- **The subject decides**, not a term mentioned in passing. A person, place, or brand named once
+is not enough to earn a slot on its own.
 - When nothing fits well, use the matching **"... Lainnya"** (other) label of the closest
 section rather than forcing a specific one.
 
@@ -56,5 +74,9 @@ section rather than forcing a specific one.
 match any random news story, none of them a phrase nobody would search.
 - Every keyword traces to something the content actually states.
 - No keyword repeats or contains another.
-- `categoryauto` is exactly one label copied verbatim from the allowed list, not a translation,
-not a list, not a keyword restated, and not excluded by that label's own description.
+- `categoryauto` holds exactly {category_choices} labels, each copied verbatim from the allowed
+list, all different from one another, none of them a translation, a reworded variant, a keyword
+restated, or a label excluded by its own description.
+- The labels are ordered best fit first: rank 1 is the desk you would actually file this under,
+and each later label is a reading a section editor could defend — not filler, and not a
+near-duplicate of the one above it.
