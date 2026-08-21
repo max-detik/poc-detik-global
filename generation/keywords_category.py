@@ -112,6 +112,20 @@ def _format_category_labels():
     return "\n".join(f"- {leaf} — {desc}" for leaf, desc in _category_labels())
 
 
+def render_system_instruction():
+    """The full system prompt as sent to the model, placeholders filled in.
+
+    The stored template keeps `{category_list}` and `{category_choices}` so the
+    taxonomy stays a CSV edit rather than a prompt edit; this is what the model
+    actually reads. scripts/dump_prompts.py writes it out for review.
+    """
+    return (
+        load_prompt("keywords_category")
+        .replace("{category_list}", _format_category_labels())
+        .replace("{category_choices}", str(CATEGORY_CHOICES))
+    )
+
+
 def generate_keywords_category(content):
     """Derive `keywordauto` (5-10 terms) and `categoryauto` from raw content text.
 
@@ -126,11 +140,7 @@ def generate_keywords_category(content):
 
     api = client()
 
-    system_instruction = (
-        load_prompt("keywords_category")
-        .replace("{category_list}", _format_category_labels())
-        .replace("{category_choices}", str(CATEGORY_CHOICES))
-    )
+    system_instruction = render_system_instruction()
 
     prompt_input = f"""
     Below is the content. Output only its keywords and its ranked categories.

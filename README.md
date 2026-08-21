@@ -44,6 +44,7 @@ evaluation/    scoring the category output
   es_categories.py     scores the production categoriser's rank-N pick
 scripts/       one-off jobs
   get_from_es.py       fetches article fields from Elasticsearch
+  dump_prompts.py      writes the system prompts out as the model receives them
   generate_global.py   older single-file generation run
 web/           the preview site (app.py + index.html)
 input/         datasets and the category labelling CSV
@@ -58,4 +59,5 @@ python -m generation.articles            # batch-generate from input/apis-data-a
 python -m evaluation.keywords_category   # score the category output
 python -m evaluation.es_categories       # score the production categoriser
 python -m scripts.get_from_es            # pull article fields from Elasticsearch
+python -m scripts.dump_prompts           # render the system prompts to output/prompts/
 ```
