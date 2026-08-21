@@ -15,7 +15,7 @@ in production. Category labels are compared on a loosened key (lowercased,
 punctuation and spacing dropped), so "Kisah Inspiratif" matches "kisah
 inspiratif" and "Musik K-pop" matches "musik kpop".
 
-Run:  python eval_keywords_category.py [--input FILE] [--limit N] [--workers N]
+Run:  python -m evaluation.keywords_category [--input FILE] [--limit N] [--workers N]
 """
 
 import argparse
@@ -25,10 +25,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-sys.path.insert(0, str(BASE_DIR))
-
-from category_scoring import (  # noqa: E402
+from evaluation.scoring import (
     TIERS,
     clean as _clean,
     loose as _loose,
@@ -40,11 +37,12 @@ from category_scoring import (  # noqa: E402
     resolve,
     score_tiers,
 )
-from prompt import generate_keywords_category  # noqa: E402
+from generation.keywords_category import generate_keywords_category
 
-INPUT_PATH = BASE_DIR / "input/test_catauto.csv"
-OUTPUT_PATH = BASE_DIR / "output/eval-keywords-category.json"
-CATEGORY_CSV_PATH = BASE_DIR / "output/eval-categories.csv"
+ROOT = Path(__file__).resolve().parents[1]
+INPUT_PATH = ROOT / "input/test_catauto.csv"
+OUTPUT_PATH = ROOT / "output/eval-keywords-category.json"
+CATEGORY_CSV_PATH = ROOT / "output/eval-categories.csv"
 
 
 # ---------- input ----------

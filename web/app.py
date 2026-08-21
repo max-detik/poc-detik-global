@@ -5,15 +5,15 @@ Input is one to five pasted detik.com article URLs, scraped on demand. The first
 one is the main article (anchor); the rest only enrich it, and the output keeps
 the same fields either way. Nothing here calls apis.detik.com.
 
-Reuses the existing scripts:
-  - scraper.py          -> scrape_article()       (detik.com URL -> article dict)
-  - generate_articles.py-> generate_from_articles()(articles -> generated article)
-  - prompt.py           -> generate_news_multi()
+Reuses the existing modules:
+  - scraping.scraper     -> scrape_article()        (detik.com URL -> article dict)
+  - generation.articles  -> generate_from_articles() (articles -> generated article)
+  - generation.news      -> generate_news_multi()
 
 The whole site sits behind HTTP Basic auth; credentials come from BASIC_AUTH_USER
 and BASIC_AUTH_PASS in .env (Railway: set them as service variables).
 
-Run:  python detikGlobal/app.py   (then open http://127.0.0.1:8000)
+Run:  python -m web.app   (from the repo root, then open http://127.0.0.1:8000)
 """
 
 import base64
@@ -28,20 +28,16 @@ from urllib.parse import urlparse, parse_qs
 
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).parent
-WEB_DIR = BASE_DIR / "web"
+from generation.articles import generate_from_articles
+from generation.news import MAX_SOURCE_ARTICLES
+from scraping.scraper import ScrapeError, scrape_article
+
+WEB_DIR = Path(__file__).parent
 
 load_dotenv()
 BASIC_AUTH_USER = os.getenv("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASS = os.getenv("BASIC_AUTH_PASS", "")
 AUTH_REALM = "detikGlobal"
-
-# prompt.py / generate_articles.py import each other by bare module name.
-sys.path.insert(0, str(BASE_DIR))
-
-from generate_articles import generate_from_articles  # noqa: E402
-from prompt import MAX_SOURCE_ARTICLES  # noqa: E402
-from scraper import ScrapeError, scrape_article  # noqa: E402
 
 
 def check_credentials(header_value):

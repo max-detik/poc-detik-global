@@ -14,8 +14,8 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-CATEGORY_LABELS_PATH = BASE_DIR / "input/categoryauto_labelling.csv"
+ROOT = Path(__file__).resolve().parents[1]
+CATEGORY_LABELS_PATH = ROOT / "input/categoryauto_labelling.csv"
 
 TIERS = ("leaf", "level2", "level1")
 TIER_TITLES = {"leaf": "LEAF", "level2": "LEVEL 2", "level1": "LEVEL 1"}

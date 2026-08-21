@@ -3,7 +3,7 @@
 Reads `original_id` from input/test_catauto.csv, looks each id up in the
 `news*` indices, and writes id / title / categories_auto to a CSV.
 
-Run:  python get_from_es.py [--limit N] [--input FILE] [--out FILE]
+Run:  python -m scripts.get_from_es [--limit N] [--input FILE] [--out FILE]
 """
 
 import argparse
@@ -13,9 +13,9 @@ from pathlib import Path
 import pandas as pd
 from elasticsearch import Elasticsearch
 
-BASE_DIR = Path(__file__).parent
-INPUT_PATH = BASE_DIR / "input/test_catauto.csv"
-OUTPUT_PATH = BASE_DIR / "output/es-articles.csv"
+ROOT = Path(__file__).resolve().parents[1]
+INPUT_PATH = ROOT / "input/test_catauto.csv"
+OUTPUT_PATH = ROOT / "output/es-articles.csv"
 
 # GCP / ES - 7, detikcom. The calls below use the elasticsearch-py 7.x style
 # (`body=` + `_source=`); the 8.x keyword form is a TypeError on that client.

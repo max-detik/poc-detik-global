@@ -2,10 +2,11 @@ import json
 import sys
 from pathlib import Path
 
-from prompt import generate_news_multi
+from generation.news import generate_news_multi
 
-INPUT_PATH = Path(__file__).parent / "apis-data.json"
-OUTPUT_PATH = Path(__file__).parent / "generated-articles.json"
+ROOT = Path(__file__).resolve().parents[1]
+INPUT_PATH = ROOT / "input/apis-data.json"
+OUTPUT_PATH = ROOT / "output/generated-articles.json"
 MAX_ATTEMPTS = 3
 
 

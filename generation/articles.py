@@ -1,11 +1,20 @@
+"""Turn scraped detik.com articles into generated English articles.
+
+generate_from_articles() is the entry point the web app uses; main() runs the
+same thing over input/apis-data-all.json as a batch.
+
+Run:  python -m generation.articles
+"""
+
 import json
 import sys
 from pathlib import Path
 
-from prompt import MAX_SOURCE_ARTICLES, generate_news_multi
+from generation.news import MAX_SOURCE_ARTICLES, generate_news_multi
 
-INPUT_PATH = Path(__file__).parent / "input/apis-data-all.json"
-OUTPUT_PATH = Path(__file__).parent / "output/generated-articles-all.json"
+ROOT = Path(__file__).resolve().parents[1]
+INPUT_PATH = ROOT / "input/apis-data-all.json"
+OUTPUT_PATH = ROOT / "output/generated-articles-all.json"
 MAX_ATTEMPTS = 3
 
 

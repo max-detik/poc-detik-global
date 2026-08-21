@@ -3,7 +3,7 @@
 `output/es-articles.csv` (written by get_from_es.py) carries each article's
 `categories_auto`: a list of three ranked guesses, each with its own leaf and
 both parent levels. This scores one rank — rank 2 by default, the runner-up —
-at leaf, level 2 and level 1, the same three tiers as eval_keywords_category.py.
+at leaf, level 2 and level 1, the same three tiers as evaluation/keywords_category.py.
 
 Two references, reported side by side:
 
@@ -19,7 +19,7 @@ The hierarchy for every label is taken from the ES rows themselves (each guess
 carries `tree_level1`/`tree_level2`), on top of input/categoryauto_labelling.csv
 — the production data uses leaves that file doesn't list.
 
-Run:  python eval_es_categories.py [--rank N] [--no-per-class]
+Run:  python -m evaluation.es_categories [--rank N] [--no-per-class]
 """
 
 import argparse
@@ -28,7 +28,7 @@ import csv
 import sys
 from pathlib import Path
 
-from category_scoring import (
+from evaluation.scoring import (
     TIERS,
     clean,
     loose,
@@ -40,11 +40,11 @@ from category_scoring import (
     score_tiers,
 )
 
-BASE_DIR = Path(__file__).parent
-ES_PATH = BASE_DIR / "output/es-articles.csv"
-GOLD_PATH = BASE_DIR / "input/test_catauto.csv"
-LLM_PATH = BASE_DIR / "output/eval-categories.csv"
-OUTPUT_PATH = BASE_DIR / "output/eval-es-rank.csv"
+ROOT = Path(__file__).resolve().parents[1]
+ES_PATH = ROOT / "output/es-articles.csv"
+GOLD_PATH = ROOT / "input/test_catauto.csv"
+LLM_PATH = ROOT / "output/eval-categories.csv"
+OUTPUT_PATH = ROOT / "output/eval-es-rank.csv"
 
 
 def read_es_categories(path):
@@ -175,7 +175,7 @@ def main():
     parser.add_argument("--es", type=Path, default=ES_PATH)
     parser.add_argument("--gold", type=Path, default=GOLD_PATH)
     parser.add_argument("--llm", type=Path, default=LLM_PATH,
-                        help="eval_keywords_category.py output; skipped when absent")
+                        help="evaluation/keywords_category.py output; skipped when absent")
     parser.add_argument("--out", type=Path, default=OUTPUT_PATH)
     parser.add_argument("--rank", type=int, default=2, help="which ranked guess to score")
     parser.add_argument("--no-per-class", action="store_true",
