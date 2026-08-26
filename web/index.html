@@ -97,6 +97,23 @@
   .content img{max-width:100%;height:auto;}
   .content table{max-width:100%;}
   .content .noncontent{display:none;}
+  /* Generated output is a form of copyable fields, one per CMS input. */
+  .form{display:flex;flex-direction:column;gap:14px;margin-top:12px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .field-head label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--navy);}
+  .field-tools{display:flex;align-items:center;gap:6px;}
+  .copy{font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:#fff;color:var(--blue);cursor:pointer;}
+  .copy:hover:not(:disabled){background:#eef2fb;}
+  .copy.done{border-color:#2e7d32;color:#2e7d32;background:#eef7ee;}
+  .field textarea,.field input{font:inherit;font-size:13px;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:#1c2530;width:100%;resize:vertical;}
+  .field textarea{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;min-height:38px;overflow:hidden;}
+  .field textarea:focus,.field input:focus{outline:2px solid #c7d4f2;border-color:var(--blue);}
+  .field .preview{display:none;border:1px solid var(--border);border-radius:6px;padding:10px 12px;background:#fbfcff;}
+  .field.previewing textarea{display:none;}
+  .field.previewing .preview{display:block;}
+  .field .preview .content{margin-top:0;}
+  .form-actions{display:flex;align-items:center;gap:10px;margin-top:4px;}
   .usage{margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--muted);}
   .spinner{display:inline-block;width:12px;height:12px;border:2px solid #c7d4f2;border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -297,25 +314,125 @@ function renderOriginals(articles) {
     .join("");
 }
 
+// ----- Generated output: a form of copyable fields, one per CMS input.
+const GEN_FIELDS = [
+  { key: "title", label: "Title", type: "input" },
+  { key: "summary", label: "Summary", type: "textarea", rows: 3 },
+  { key: "content", label: "Content (HTML)", type: "textarea", rows: 12, html: true },
+  { key: "tags", label: "Tags", type: "input", list: true },
+  { key: "keywordauto", label: "Keywords", type: "input", list: true },
+  { key: "image_cover_image_text", label: "Image caption", type: "textarea", rows: 2 },
+  { key: "image_cover_alt_image", label: "Alt image", type: "textarea", rows: 2 },
+];
+
+function fieldValue(g, f) {
+  if (f.list) return tagList(g[f.key]);
+  if (f.html) return decodeContent(g[f.key]);
+  return String(g[f.key] ?? "");
+}
+
+function fieldMarkup(f, value) {
+  const control =
+    f.type === "input"
+      ? `<input type="text" data-field="${f.key}" value="${esc(value)}" spellcheck="false">`
+      : `<textarea data-field="${f.key}" rows="${f.rows || 3}" spellcheck="false">${esc(value)}</textarea>`;
+  // Only the HTML body is worth previewing rendered; the rest are plain text.
+  const preview = f.html ? `<div class="preview"><div class="content">${value}</div></div>` : "";
+  const toggle = f.html ? `<button class="copy toggle" type="button">Preview</button>` : "";
+  return `
+    <div class="field">
+      <div class="field-head">
+        <label>${esc(f.label)}</label>
+        <span class="field-tools">${toggle}<button class="copy" type="button" data-copy="${f.key}">Copy</button></span>
+      </div>
+      ${control}
+      ${preview}
+    </div>`;
+}
+
+function autoGrow(ta) {
+  ta.style.height = "auto";
+  ta.style.height = ta.scrollHeight + 2 + "px";
+}
+
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Clipboard API needs a secure context; fall back to a scratch textarea.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.append(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch {}
+    ta.remove();
+  }
+  const label = btn.textContent;
+  btn.textContent = "Copied";
+  btn.classList.add("done");
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => {
+    btn.textContent = label;
+    btn.classList.remove("done");
+  }, 1400);
+}
+
 function renderGenerated(g, usage) {
   const u = usage || g.usage || {};
   const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
   genCol.className = "col gen";
   genCol.innerHTML = `
     <div class="badge badge-gen">Output — Generated (EN)</div>
-    <h2>${esc(g.title)}</h2>
-    <p class="summary">${esc(g.summary)}</p>
-    <div class="content">${decodeContent(g.content)}</div>
-    <div class="metadata">
-      <h3>Metadata</h3>
-      <div class="meta"><b>Category:</b> ${esc(g.categoryauto)} &nbsp;|&nbsp; <b>Tags:</b> ${esc(tagList(g.tags))}</div>
-      <div class="meta"><b>Keywords:</b> ${esc(tagList(g.keywordauto))}</div>
-      <div class="meta"><b>Image caption:</b> ${esc(g.image_cover_image_text)}</div>
-      <div class="meta"><b>Alt image:</b> ${esc(g.image_cover_alt_image)}</div>
+    <div class="form">
+      ${GEN_FIELDS.map((f) => fieldMarkup(f, fieldValue(g, f))).join("")}
+      <div class="form-actions">
+        <button class="copy" type="button" data-copy-all="1">Copy all fields</button>
+        <span class="hint">Edit any field before copying — changes stay in the browser.</span>
+      </div>
     </div>
     <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
       (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+  genCol.querySelectorAll("textarea").forEach((ta) => {
+    autoGrow(ta);
+    ta.addEventListener("input", () => autoGrow(ta));
+  });
 }
+
+function controlFor(key) {
+  return genCol.querySelector(`[data-field="${key}"]`);
+}
+
+// One delegated handler: per-field copy, HTML preview toggle, and copy-all.
+genCol.addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  if (btn.dataset.copy) {
+    const control = controlFor(btn.dataset.copy);
+    if (control) copyText(control.value, btn);
+    return;
+  }
+
+  if (btn.dataset.copyAll) {
+    const text = GEN_FIELDS.map((f) => {
+      const control = controlFor(f.key);
+      return `${f.label}:\n${control ? control.value : ""}`;
+    }).join("\n\n");
+    copyText(text, btn);
+    return;
+  }
+
+  if (btn.classList.contains("toggle")) {
+    const field = btn.closest(".field");
+    const on = field.classList.toggle("previewing");
+    btn.textContent = on ? "Edit HTML" : "Preview";
+    // Keep the preview in step with edits made in the textarea.
+    if (on) field.querySelector(".preview .content").innerHTML = field.querySelector("textarea").value;
+    else autoGrow(field.querySelector("textarea"));
+  }
+});
 
 async function api(url, options) {
   const res = await fetch(url, options);
