@@ -269,6 +269,22 @@ function decodeContent(html) {
   return ta.value;
 }
 
+// What Copy puts on the clipboard for an HTML field: the reader's text, not the
+// markup. Block tags become line breaks so paragraphs survive the round trip;
+// everything else is unwrapped.
+const BLOCK_TAGS = "p,div,li,tr,h1,h2,h3,h4,h5,h6,blockquote,figure,figcaption,section,article,pre";
+
+function htmlToText(html) {
+  const doc = new DOMParser().parseFromString(String(html ?? ""), "text/html");
+  doc.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+  // A blank line between blocks, so paragraphs stay paragraphs when pasted.
+  doc.body.querySelectorAll(BLOCK_TAGS).forEach((el) => el.append("\n\n"));
+  return doc.body.textContent
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function tagList(value) {
   if (Array.isArray(value)) return value.join(", ");
   return String(value ?? "").split("|").filter(Boolean).join(", ");
@@ -406,6 +422,12 @@ function controlFor(key) {
   return genCol.querySelector(`[data-field="${key}"]`);
 }
 
+function copyValue(key, control) {
+  // The textarea holds the markup; an HTML field is copied as its rendered text.
+  const field = GEN_FIELDS.find((f) => f.key === key);
+  return field && field.html ? htmlToText(control.value) : control.value;
+}
+
 // One delegated handler: per-field copy, HTML preview toggle, and copy-all.
 genCol.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
@@ -413,14 +435,14 @@ genCol.addEventListener("click", (e) => {
 
   if (btn.dataset.copy) {
     const control = controlFor(btn.dataset.copy);
-    if (control) copyText(control.value, btn);
+    if (control) copyText(copyValue(btn.dataset.copy, control), btn);
     return;
   }
 
   if (btn.dataset.copyAll) {
     const text = GEN_FIELDS.map((f) => {
       const control = controlFor(f.key);
-      return `${f.label}:\n${control ? control.value : ""}`;
+      return `${f.label}:\n${control ? copyValue(f.key, control) : ""}`;
     }).join("\n\n");
     copyText(text, btn);
     return;

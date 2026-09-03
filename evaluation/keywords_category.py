@@ -7,6 +7,8 @@ Runs the function over a labelled dataset and scores the category it picks:
   input/test_catauto.csv     — same thing under the older header (`text` /
                                `category`); both layouts are accepted.
   input/apis-data-all.json   — `content` in, scored against `categoryauto`.
+  input/sample_categoryauto_v7.csv — the per-category sample, scored against
+                               `categoryauto_new`.
 
 Single-label multiclass metrics: accuracy plus per-class and macro/weighted
 precision, recall, F1. The keywords the function returns are recorded in the JSON
@@ -18,6 +20,8 @@ punctuation and spacing dropped), so "Kisah Inspiratif" matches "kisah
 inspiratif" and "Musik K-pop" matches "musik kpop".
 
 Run:  python -m evaluation.keywords_category [--input FILE] [--limit N] [--workers N]
+      python -m evaluation.keywords_category --resume output/eval-sample-v7.json ...
+        — re-runs only what errored last time and rewrites the full report.
 """
 
 import argparse
@@ -84,7 +88,7 @@ def _records_from_json(path):
 # read by the first header that's actually present.
 CSV_COLUMNS = {
     "content": ("content", "text"),
-    "category": ("catauto", "category"),
+    "category": ("catauto", "category", "categoryauto_new"),
     "id": ("id", "original_id"),
 }
 
@@ -151,6 +155,21 @@ def _records_from_csv(path):
 
 
 # ---------- run ----------
+
+def load_previous(path):
+    """{id: result} for the results of an earlier run that did not error.
+
+    A run can end early — an API outage, or the account running out of credit
+    mid-pass — leaving a JSON where some articles carry `error` instead of a
+    prediction. Those ids are left out so `--resume` regenerates them; the rest
+    are reused as they are, and are not paid for twice.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        saved = json.load(f)
+    results = saved.get("results", saved) if isinstance(saved, dict) else saved
+    return {r["id"]: r for r in results if r.get("id") and not r.get("error")}
+
+
 
 def _keywords(generated):
     """The predicted keywords as a plain list, whichever shape they arrive in.
@@ -344,6 +363,12 @@ def main():
         help="CSV of title / categoryauto / predicted categoryauto",
     )
     parser.add_argument("--limit", type=int, help="only evaluate the first N articles")
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        help="reuse the successful results in this earlier --out JSON and only "
+             "generate the articles that errored or are missing from it",
+    )
     parser.add_argument("--workers", type=int, default=4, help="parallel generations")
     parser.add_argument(
         "--no-per-class",
@@ -356,9 +381,18 @@ def main():
     if args.limit:
         records = records[: args.limit]
 
-    print(f"Evaluating {len(records)} article(s) from {args.input} ...", flush=True)
+    done = load_previous(args.resume) if args.resume else {}
+    todo = [r for r in records if r["id"] not in done]
+    if done:
+        print(f"Resuming from {args.resume}: {len(done)} article(s) already generated, "
+              f"{len(todo)} to run", flush=True)
+
+    print(f"Evaluating {len(todo)} article(s) from {args.input} ...", flush=True)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        results = list(pool.map(evaluate_article, records))
+        fresh = {r["id"]: r for r in pool.map(evaluate_article, todo)}
+
+    # Kept in dataset order, whichever run each result came from.
+    results = [done.get(r["id"]) or fresh[r["id"]] for r in records]
 
     summary = summarize(results)
     print_report(summary, results, per_class=not args.no_per_class)
