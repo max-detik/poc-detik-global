@@ -33,7 +33,7 @@ supporting facts are inserted only as new paragraphs between the anchor's own. N
 absent from the sources; never cut anchor substance for brevity (condense wording only).
 
 ### Track B — Translation only, all taken from the ANCHOR (never a supporting article):
-### `title`, `tags`, `keywordauto`, and the cover/story image metadata fields
+### `title`, `tags`, `keywords_auto`/`keywordauto`, and the cover/story image metadata fields
 ### `image_cover_text`, `image_cover_original_title`, `image_cover_original_description`,
 ### `image_cover_straltfoto`, `image_cover_strjudul`, `image_cover_strdescription`, and their
 ### `image_story_*` counterparts
@@ -42,7 +42,7 @@ no expanding/tightening.
 - Translate accurately, using the anchor's content as context to resolve ambiguity — no
   editorializing or glosses beyond what's needed for the term to make sense.
 - Same granularity/order as the anchor (one-to-one; nothing invented, dropped, merged),
-  subject only to the `tags`/`keywordauto` 5–10 item floor under Output structure.
+  subject only to the `tags`/`keywords_auto` 5–10 item floor under Output structure.
 - Proper nouns/institutions/places as accurate as Track A (e.g. "DPR" → "House of
   Representatives (DPR)" only if genuinely ambiguous).
 - For the twelve `image_cover_*`/`image_story_*` fields: translate as written, same length
@@ -142,7 +142,7 @@ or vice versa, and normalize any merged-in supporting material to the anchor's f
 
 ## Output structure
 JSON with exactly: `title`, `subtitle`, `summary`, `content`, `tags`, `keywordauto`,
-`image_cover_text`, `image_cover_original_title`, `image_cover_original_description`,
+`keywords_auto`, `image_cover_text`, `image_cover_original_title`, `image_cover_original_description`,
 `image_cover_straltfoto`, `image_cover_strjudul`, `image_cover_strdescription`,
 `image_story_text`, `image_story_original_title`, `image_story_original_description`,
 `image_story_straltfoto`, `image_story_strjudul`, `image_story_strdescription`.
@@ -180,8 +180,17 @@ one-to-one to its anchor paragraph; each inserted paragraph carries genuinely ne
   required**: if the anchor supplies fewer than 5, top up first from supporting-article tags
   genuinely about the anchor's story, then from terms the anchor's own text clearly supports
   — appended after the anchor's own.
-- **`keywordauto`** — translated one-to-one, same order, **5–10 items**, topped up the same
-  way only if the anchor supplies fewer than 5.
+- **`keywords_auto`** — the anchor's keywords, translated one-to-one, same order, **5–10
+  items**, topped up the same way only if the anchor supplies fewer than 5. Each entry is an
+  object (see the shape below): `keyword` **lowercase**, in the canonical form another English
+  article on the same subject would use, no pipe character inside a keyword; `label` always
+  `null`; `score` 0–1 for how central that keyword is to the story, **descending** down the
+  array, not flattened to one number. These keywords feed search and a content-based
+  recommender, so keep both named entities (people, institutions, clubs, places, products) and
+  topic terms (the issue or event type), and keep the spelling a term another article would
+  match on.
+- **`keywordauto`** — the `keywords_auto` keywords in the same order, joined with `|`, no
+  spaces around the separator: `keyword one|keyword two|keyword three`.
 - **`image_cover_text`** — anchor's cover caption/credit, translated, same length ("Foto:
   Ayu" → "Photo: Ayu"). **`image_cover_original_title`** — translated.
   **`image_cover_original_description`** — longer descriptive text, translated, same detail.
@@ -198,7 +207,13 @@ Example shape (illustrative only):
 {
   "title": "...", "subtitle": "...", "summary": "...",
   "content": "<p>...</p><h2>Heading One</h2><p>...</p><table class=\"pic_artikel_sisip_table\">...<img src=\"...\" alt=\"...\" title=\"...\" caption=\"...\"/>...</table><p>...</p>",
-  "tags": ["...", "...", "..."], "keywordauto": ["...", "...", "..."],
+  "tags": ["...", "...", "..."],
+  "keywordauto": "keyword one|keyword two|keyword three",
+  "keywords_auto": [
+    {"score": 0.95, "label": null, "keyword": "keyword one"},
+    {"score": 0.8, "label": null, "keyword": "keyword two"},
+    {"score": 0.6, "label": null, "keyword": "keyword three"}
+  ],
   "image_cover_text": "Photo: Ayu", "image_cover_original_title": "...",
   "image_cover_original_description": "...", "image_cover_straltfoto": "...",
   "image_cover_strjudul": "...", "image_cover_strdescription": "<p>...</p>",
@@ -228,32 +243,14 @@ Example shape (illustrative only):
   generic noun to imply a venue no source named.
 - `summary` (≤130 chars) is a complete sentence, not a truncated fragment.
 - `subtitle` adds a genuinely new detail beyond `title`, not a rephrase.
-- `title`, `tags`, `keywordauto`, and all twelve `image_cover_*`/`image_story_*` fields are
+- `title`, `tags`, `keywords_auto`, and all twelve `image_cover_*`/`image_story_*` fields are
   faithful translations of the **anchor's** values — not rewritten, tightened, or expanded
-  (beyond `title`'s length restructuring) — with 5–10 items in `tags`/`keywordauto`.
+  (beyond `title`'s length restructuring) — with 5–10 items in `tags`/`keywords_auto`.
+- Every `keywords_auto` entry is lowercase with `label: null` and a descending `score`, carries
+  no pipe character, and `keywordauto` is exactly those keywords in the same order joined with
+  `|`.
 - The two `strdescription` fields keep their HTML tags intact, only inner text translated.
 - All "Baca juga"/"Tonton juga video" non-content blocks are dropped from `content`, with no
   actual reporting removed alongside them.
 - `content`'s raw-vs-escaped HTML encoding matches the anchor.
 """
-def format_article(article, label):
-    return f"""
-{label}:
-Title: {article["title"]}
-Subtitle: {article["subtitle"]}
-Content: {article["content"]}
-Summary: {article["summary"]}
-Tags: {article["tags"]}
-Keyword Auto: {article["keywordauto"]}
-Image Cover Text: {article["image_cover_text"]}
-Image Cover Original Title: {article["image_cover_original_title"]}
-Image Cover Original Description: {article["image_cover_original_description"]}
-Image Cover Straltfoto: {article["image_cover_straltfoto"]}
-Image Cover Strjudul: {article["image_cover_strjudul"]}
-Image Cover Strdescription: {article["image_cover_strdescription"]}
-Image Story Text: {article["image_story_text"]}
-Image Story Original Title: {article["image_story_original_title"]}
-Image Story Original Description: {article["image_story_original_description"]}
-Image Story Straltfoto: {article["image_story_straltfoto"]}
-Image Story Strjudul: {article["image_story_strjudul"]}
-Image Story Strdescription: {article["image_story_strdescription"]}

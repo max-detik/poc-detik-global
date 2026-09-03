@@ -1,8 +1,10 @@
 """Keyword and category generation from a piece of content.
 
-generate_keywords_category() reads one article body and returns the search
-keywords it should carry plus its ranked `categoryauto` labels, chosen from the
-taxonomy in input/categoryauto_labelling.csv.
+generate_keywords_category() reads one article body and returns the scored
+search keywords it should be indexed under plus its ranked category labels,
+chosen from the taxonomy in input/categoryauto_labelling.csv. The keywords serve
+both search and content-based recommendation, so they favour named entities and
+topics that recur across articles.
 
 Separate from news.py, which rewrites articles: different prompt, different
 schema, different input. The shared OpenRouter plumbing is in llm.py.
@@ -11,7 +13,7 @@ schema, different input. The shared OpenRouter plumbing is in llm.py.
 import csv
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from pydantic import Field, create_model
 
@@ -20,7 +22,9 @@ from generation.llm import (
     OPENROUTER_REASONING_EFFORT,
     OPENROUTER_TEMPERATURE,
     client,
+    keywords_field,
     load_prompt,
+    normalize_keywords,
     parse_response,
 )
 from openai.types.shared_params import Reasoning
@@ -77,25 +81,45 @@ def _category_labels():
 
 
 @lru_cache(maxsize=1)
-def _keyword_category_schema():
-    """KeywordCategorySchema with `categoryauto` restricted to the CSV's leaves.
+def _category_auto_model():
+    """CategoryAuto with `leaf` restricted to the CSV's leaves.
 
-    `categoryauto` is a ranked list of CATEGORY_CHOICES labels, best fit first —
-    the same shape the production categoriser stores (rank 1..3), so a story that
-    genuinely spans several desks is not forced into one.
+    The tree levels and the id are null here: this call only picks the leaf, and
+    the parents are resolved downstream from the same CSV.
+    """
+    leaves = tuple(leaf for leaf, _ in _category_labels())
+    return create_model(
+        "CategoryAuto",
+        score=(float, Field(..., ge=0, le=1, description="confidence 0-1, descending across the array")),
+        tree_level2=(Optional[str], Field(..., description="always null")),
+        tree_level1=(Optional[str], Field(..., description="always null")),
+        rank=(int, Field(..., ge=1, description="1-based position, ascending across the array")),
+        id=(Optional[str], Field(..., description="always null")),
+        leaf=(Literal[leaves], Field(..., description="most specific category label")),  # type: ignore[valid-type]
+    )
+
+
+@lru_cache(maxsize=1)
+def _keyword_category_schema():
+    """The response schema: ranked categories and scored keywords.
+
+    `categories_auto` is a ranked list of CATEGORY_CHOICES labels, best fit first
+    — the same shape the production categoriser stores (rank 1..3), so a story
+    that genuinely spans several desks is not forced into one. `categoryauto` and
+    `keywordauto` are the flat forms the CMS stores; both are re-derived from the
+    arrays in _normalize(), so a model that fills them inconsistently can't drift.
 
     Built at call time so the allowed values always come from the CSV on disk,
     and so importing this module doesn't require the file to be present.
     """
-    leaves = tuple(leaf for leaf, _ in _category_labels())
     return create_model(
         "KeywordCategorySchema",
-        keywordauto=(
-            List[str],
-            Field(min_length=5, max_length=10, description="search keywords describing the content"),
-        ),
         categoryauto=(
-            List[Literal[leaves]],  # type: ignore[valid-type]
+            str,
+            Field(..., description="the single best-matching leaf, identical to categories_auto[0].leaf"),
+        ),
+        categories_auto=(
+            List[_category_auto_model()],  # type: ignore[valid-type]
             Field(
                 min_length=CATEGORY_CHOICES,
                 max_length=CATEGORY_CHOICES,
@@ -105,7 +129,28 @@ def _keyword_category_schema():
                 ),
             ),
         ),
+        keywordauto=(
+            str,
+            Field(..., description="all keywords joined with '|', no surrounding spaces"),
+        ),
+        keywords_auto=keywords_field(),
     )
+
+
+def _normalize(result):
+    """Make the flat fields agree with the arrays they summarize.
+
+    The model is asked for `rank`, `categoryauto` and `keywordauto` in the prompt,
+    but they are pure functions of the arrays, so they are recomputed here rather
+    than trusted: ranks renumber 1..n in array order, `categoryauto` becomes the
+    first leaf, and `keywordauto` the pipe-joined keywords (in llm.py, shared with
+    the article rewrite).
+    """
+    categories = result.get("categories_auto") or []
+    for position, category in enumerate(categories, start=1):
+        category["rank"] = position
+    result["categoryauto"] = categories[0]["leaf"] if categories else ""
+    return normalize_keywords(result)
 
 
 def _format_category_labels():
@@ -127,12 +172,14 @@ def render_system_instruction():
 
 
 def generate_keywords_category(content):
-    """Derive `keywordauto` (5-10 terms) and `categoryauto` from raw content text.
+    """Derive the keyword and category metadata for a piece of content.
 
     `content` is a plain string — article body, HTML or plain text, in any
-    language. `categoryauto` is a ranked list of CATEGORY_CHOICES labels, best fit
-    first, each one from input/categoryauto_labelling.csv — enforced both in the
-    prompt and by the response schema. Returns (result_dict, token_usage).
+    language. Returns (result_dict, token_usage), where the dict carries
+    `categories_auto` (CATEGORY_CHOICES scored labels, best fit first, each one
+    from input/categoryauto_labelling.csv — enforced both in the prompt and by the
+    response schema), `keywords_auto` (5-10 scored keywords, most central first),
+    and the flat `categoryauto` / pipe-joined `keywordauto` forms of the two.
     """
     content = (content or "").strip()
     if not content:
@@ -160,4 +207,5 @@ def generate_keywords_category(content):
         extra_body={"usage": {"include": True}},
     )
 
-    return parse_response(response)
+    result, usage = parse_response(response)
+    return _normalize(result), usage

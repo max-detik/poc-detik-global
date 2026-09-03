@@ -2,8 +2,10 @@
 
 Runs the function over a labelled dataset and scores the category it picks:
 
-  input/test_catauto.csv     — the default: the `text` column in, scored against
-                               the `category` column.
+  input/eval_catauto_train.csv — the default: the `content` column in, scored
+                               against the `catauto` column.
+  input/test_catauto.csv     — same thing under the older header (`text` /
+                               `category`); both layouts are accepted.
   input/apis-data-all.json   — `content` in, scored against `categoryauto`.
 
 Single-label multiclass metrics: accuracy plus per-class and macro/weighted
@@ -25,6 +27,12 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+# Importable as a package module (python -m evaluation.keywords_category) and
+# runnable as a plain file; only the former puts the repo root on sys.path.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from evaluation.scoring import (
     TIERS,
     clean as _clean,
@@ -39,8 +47,7 @@ from evaluation.scoring import (
 )
 from generation.keywords_category import generate_keywords_category
 
-ROOT = Path(__file__).resolve().parents[1]
-INPUT_PATH = ROOT / "input/test_catauto.csv"
+INPUT_PATH = ROOT / "input/eval_catauto_train.csv"
 OUTPUT_PATH = ROOT / "output/eval-keywords-category.json"
 CATEGORY_CSV_PATH = ROOT / "output/eval-categories.csv"
 
@@ -73,32 +80,59 @@ def _records_from_json(path):
     ]
 
 
+# The two CSV layouts in use name the same three things differently, so each is
+# read by the first header that's actually present.
+CSV_COLUMNS = {
+    "content": ("content", "text"),
+    "category": ("catauto", "category"),
+    "id": ("id", "original_id"),
+}
+
+
+def _pick_column(fieldnames, names):
+    """The first of `names` present in the CSV header, or None."""
+    return next((name for name in names if name in fieldnames), None)
+
+
 def _records_from_csv(path):
-    """input/test_catauto.csv: `text` is the content, `category` is the label.
+    """Evaluation records from a labelled CSV.
+
+    input/eval_catauto_train.csv uses `content`/`catauto`; the older
+    input/test_catauto.csv uses `text`/`category` — either is accepted.
 
     Rows without text, or without a category, are dropped — an unlabelled row
     cannot be scored, and a stringified null ("nan", "none", "null", ...) counts
-    as no label. A few articles appear twice under one `original_id` with
-    identical text (two `chunk_order` rows); only the first is kept, so the article
-    is neither generated nor counted twice.
+    as no label. A few articles appear twice under one id with identical text (two
+    `chunk_order` rows); only the first is kept, so the article is neither
+    generated nor counted twice.
     """
     # Article bodies run past the default 128 KB field cap.
     csv.field_size_limit(sys.maxsize)
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
-        missing = {"text", "category"} - set(reader.fieldnames or [])
+        fieldnames = set(reader.fieldnames or [])
+        columns = {
+            field: _pick_column(fieldnames, names)
+            for field, names in CSV_COLUMNS.items()
+        }
+        missing = [
+            " / ".join(CSV_COLUMNS[field])
+            for field in ("content", "category")
+            if columns[field] is None
+        ]
         if missing:
             raise SystemExit(
-                f"{path} is missing required column(s): {', '.join(sorted(missing))}"
+                f"{path} is missing required column(s): {', '.join(missing)}"
             )
         records, skipped, duplicates, seen = [], 0, 0, set()
         for i, row in enumerate(reader):
-            content = _clean(row.get("text"))
-            category = _norm(_clean(row.get("category")))
+            content = _clean(row.get(columns["content"]))
+            category = _norm(_clean(row.get(columns["category"])))
             if not content or not category:
                 skipped += 1
                 continue
-            record_id = _clean(row.get("original_id")) or _clean(row.get("")) or str(i)
+            # The unnamed first column is test_catauto.csv's row index.
+            record_id = _clean(row.get(columns["id"])) or _clean(row.get("")) or str(i)
             if record_id in seen:
                 duplicates += 1
                 continue
@@ -112,11 +146,26 @@ def _records_from_csv(path):
     if skipped:
         print(f"  skipped {skipped} row(s) with no text or no category label")
     if duplicates:
-        print(f"  skipped {duplicates} duplicate row(s) sharing an original_id")
+        print(f"  skipped {duplicates} duplicate row(s) sharing an id")
     return records
 
 
 # ---------- run ----------
+
+def _keywords(generated):
+    """The predicted keywords as a plain list, whichever shape they arrive in.
+
+    Current output carries `keywords_auto` (scored objects) plus the pipe-joined
+    `keywordauto`; output saved before that had `keywordauto` as a list.
+    """
+    scored = generated.get("keywords_auto")
+    if scored:
+        return [k.get("keyword", "") for k in scored]
+    raw = generated.get("keywordauto") or []
+    if isinstance(raw, str):
+        return [k for k in (part.strip() for part in raw.split("|")) if k]
+    return raw
+
 
 def evaluate_article(record):
     """Generate for one record and score it. Errors are captured, not raised."""
@@ -131,10 +180,16 @@ def evaluate_article(record):
         result["error"] = f"{type(e).__name__}: {e}"
         return result
 
-    # `categoryauto` is a ranked list, best fit first; rank 1 is the single-label
-    # prediction. A plain string is still accepted, for older saved output.
-    raw = generated.get("categoryauto")
-    predicted = [_norm(c) for c in (raw if isinstance(raw, list) else [raw]) if _clean(c)]
+    # `categories_auto` is a ranked list of scored labels, best fit first; rank 1
+    # is the single-label prediction. Older saved output carried the ranking in
+    # `categoryauto` itself, as a list or a plain string — both still accepted.
+    raw = generated.get("categories_auto")
+    if raw:
+        labels = [c.get("leaf") for c in raw]
+    else:
+        raw = generated.get("categoryauto")
+        labels = raw if isinstance(raw, list) else [raw]
+    predicted = [_norm(c) for c in labels if _clean(c)]
     result["predicted_categories"] = predicted
     result["predicted_category"] = predicted[0] if predicted else ""
     result["gold_tiers"] = resolve(record["gold_category"])
@@ -143,7 +198,7 @@ def evaluate_article(record):
     if len(set(predicted)) != len(predicted):
         result["duplicate_labels"] = True
     # Recorded for review only — the datasets carry no keyword labels to score.
-    result["predicted_keywords"] = generated.get("keywordauto") or []
+    result["predicted_keywords"] = _keywords(generated)
     result["usage"] = usage
     return result
 
@@ -279,7 +334,7 @@ def main():
         "--input",
         type=Path,
         default=INPUT_PATH,
-        help="CSV dataset (text/category) or JSON (content/categoryauto)",
+        help="CSV dataset (content/catauto or text/category) or JSON (content/categoryauto)",
     )
     parser.add_argument("--out", type=Path, default=OUTPUT_PATH)
     parser.add_argument(

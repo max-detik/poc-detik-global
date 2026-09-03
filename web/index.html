@@ -320,7 +320,8 @@ const GEN_FIELDS = [
   { key: "summary", label: "Summary", type: "textarea", rows: 3 },
   { key: "content", label: "Content (HTML)", type: "textarea", rows: 12, html: true },
   { key: "tags", label: "Tags", type: "input", list: true },
-  { key: "keywordauto", label: "Keywords", type: "input", list: true },
+  // Already pipe-joined by the generator — shown as-is so it pastes into the CMS verbatim.
+  { key: "keywordauto", label: "Keywords", type: "input" },
   { key: "image_cover_image_text", label: "Image caption", type: "textarea", rows: 2 },
   { key: "image_cover_alt_image", label: "Alt image", type: "textarea", rows: 2 },
 ];
@@ -337,10 +338,11 @@ function fieldMarkup(f, value) {
       ? `<input type="text" data-field="${f.key}" value="${esc(value)}" spellcheck="false">`
       : `<textarea data-field="${f.key}" rows="${f.rows || 3}" spellcheck="false">${esc(value)}</textarea>`;
   // Only the HTML body is worth previewing rendered; the rest are plain text.
+  // It opens rendered — the markup is there to edit, but reading it is the common case.
   const preview = f.html ? `<div class="preview"><div class="content">${value}</div></div>` : "";
-  const toggle = f.html ? `<button class="copy toggle" type="button">Preview</button>` : "";
+  const toggle = f.html ? `<button class="copy toggle" type="button">Edit HTML</button>` : "";
   return `
-    <div class="field">
+    <div class="field${f.html ? " previewing" : ""}">
       <div class="field-head">
         <label>${esc(f.label)}</label>
         <span class="field-tools">${toggle}<button class="copy" type="button" data-copy="${f.key}">Copy</button></span>
