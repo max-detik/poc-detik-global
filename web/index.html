@@ -29,16 +29,18 @@
   .tab.active{color:var(--navy);border-color:var(--navy);border-bottom:1px solid #fff;background:#fff;}
   .panel{display:none;width:100%;}
   .panel.active{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
-  .presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;width:100%;max-width:900px;}
-  @media (max-width:640px){ .presets{grid-template-columns:1fr;} }
-  .preset{position:relative;display:block;padding:12px 14px 12px 38px;background:#fff;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;}
+  /* One row, however many samples there are; equal columns share the width. */
+  .presets{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px;width:100%;max-width:900px;}
+  @media (max-width:760px){ .presets{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr;} }
+  .preset{position:relative;display:block;padding:12px 12px 12px 32px;background:#fff;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;}
   .preset:hover{border-color:#c7d4f2;background:#fbfcff;}
   .preset input{position:absolute;opacity:0;pointer-events:none;}
-  .preset .dot{position:absolute;left:14px;top:14px;width:14px;height:14px;border:2px solid #c3cad6;border-radius:50%;background:#fff;transition:border-color .15s;}
+  .preset .dot{position:absolute;left:11px;top:14px;width:14px;height:14px;border:2px solid #c3cad6;border-radius:50%;background:#fff;transition:border-color .15s;}
   .preset .dot::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--navy);transform:scale(0);transition:transform .15s;}
   .preset .src{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--blue);background:#e8edfb;padding:2px 6px;border-radius:3px;margin-bottom:6px;}
   .preset .t{display:block;font-size:13px;font-weight:600;color:#1c2530;line-height:1.4;}
-  .preset .u{display:block;margin-top:5px;color:var(--muted);font-size:11px;word-break:break-all;}
+  /* Wrap at the path separators, never through an article id. */
+  .preset .u{display:block;margin-top:5px;color:var(--muted);font-size:11px;word-break:normal;overflow-wrap:break-word;}
   .preset:has(input:checked){border-color:var(--navy);background:#f7f9ff;box-shadow:0 0 0 1px var(--navy) inset;}
   .preset:has(input:checked) .dot{border-color:var(--navy);}
   .preset:has(input:checked) .dot::after{transform:scale(1);}
@@ -142,18 +144,32 @@
   <div class="panel" id="panel-preset" role="tabpanel">
     <div class="presets" id="presets" role="radiogroup" aria-label="Sample articles">
       <label class="preset">
-        <input type="radio" name="presetUrl" value="https://www.detik.com/bali/nusra/d-8604738/misteri-pria-tewas-telanjang-di-penginapan-usai-check-in-dengan-perempuan" checked>
+        <input type="radio" name="presetId" value="8604738" checked>
         <span class="dot" aria-hidden="true"></span>
         <span class="src">detikBali</span>
         <span class="t">Misteri pria tewas telanjang di penginapan usai check-in dengan perempuan</span>
         <span class="u">detik.com/bali/nusra/d-8604738</span>
       </label>
       <label class="preset">
-        <input type="radio" name="presetUrl" value="https://wolipop.detik.com/worklife/d-8606706/viral-alumni-sma-bogor-pamer-pindah-ke-as-demi-kejar-mimpi-faktanya-ternyata">
+        <input type="radio" name="presetId" value="8606706">
         <span class="dot" aria-hidden="true"></span>
         <span class="src">Wolipop · Worklife</span>
         <span class="t">Viral alumni SMA Bogor pamer pindah ke AS demi kejar mimpi, faktanya ternyata</span>
         <span class="u">wolipop.detik.com/worklife/d-8606706</span>
+      </label>
+      <label class="preset">
+        <input type="radio" name="presetId" value="8605519">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">detikNews · Berita</span>
+        <span class="t">Jangan salah sangka, ternyata ini cerita di balik nama Kelurahan Bencongan</span>
+        <span class="u">news.detik.com/berita/d-8605519</span>
+      </label>
+      <label class="preset">
+        <input type="radio" name="presetId" value="8606892">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">detikInet · Cyberlife</span>
+        <span class="t">Toko mie tutup permanen dan bagi resep rahasia: bisnis FnB rapuh review</span>
+        <span class="u">inet.detik.com/cyberlife/d-8606892</span>
       </label>
     </div>
   </div>
@@ -189,6 +205,8 @@ tabs.forEach((tab) => tab.addEventListener("click", () => {
     t.setAttribute("aria-selected", String(on));
     $("panel-" + t.dataset.tab).classList.toggle("active", on);
   });
+  // Switching to the sample tab previews whatever is already selected.
+  if (activeTab === "preset") showSample(selectedSampleId());
 }));
 
 // ----- URL rows: row 0 is the main article (anchor), rows 1..4 are supporting.
@@ -233,14 +251,45 @@ function refreshUrlRows() {
 }
 
 function selectedUrls() {
-  if (activeTab === "preset") {
-    const picked = document.querySelector('input[name="presetUrl"]:checked');
-    return picked ? [picked.value] : [];
-  }
   // Blank supporting rows are simply ignored; order is preserved, so the first
   // filled row stays the anchor.
   return [...urlRows.querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean);
 }
+
+function selectedSampleId() {
+  const picked = document.querySelector('input[name="presetId"]:checked');
+  return picked ? picked.value : "";
+}
+
+// Samples come from scraping/apis-data-all.json, already in the generator's shape —
+// nothing is scraped for them. Fetched once per id, then kept for the session.
+const sampleCache = new Map();
+
+async function loadSample(id) {
+  if (!sampleCache.has(id)) {
+    const { article } = await api(`/api/sample?id=${encodeURIComponent(id)}`);
+    sampleCache.set(id, article);
+  }
+  return sampleCache.get(id);
+}
+
+// Picking a sample shows its input straight away, before any generation.
+async function showSample(id) {
+  if (!id) return;
+  origOpen = [];
+  placeholder(origCol, "Loading sample…");
+  try {
+    renderOriginals([await loadSample(id)]);
+    setStatus("", false, false);
+  } catch (e) {
+    placeholder(origCol, "Could not load the sample.");
+    setStatus(e.message, true, false);
+  }
+}
+
+document.querySelectorAll('input[name="presetId"]').forEach((radio) => {
+  radio.addEventListener("change", () => showSample(radio.value));
+});
 
 addUrlBtn.addEventListener("click", () => addUrlRow(""));
 addUrlRow("");
@@ -468,32 +517,46 @@ async function api(url, options) {
 function setBusy(busy) {
   generateBtn.disabled = busy;
   urlRows.querySelectorAll("input, button").forEach((el) => { el.disabled = busy; });
-  document.querySelectorAll('input[name="presetUrl"]').forEach((r) => { r.disabled = busy; });
+  document.querySelectorAll('input[name="presetId"]').forEach((r) => { r.disabled = busy; });
   addUrlBtn.disabled = busy || urlRows.children.length >= MAX_ARTICLES;
 }
 
-// Scrape every source first so they show immediately, then generate one rewrite.
-async function generateNewArticle() {
+// Sources are gathered first so they show immediately, then generated in one go.
+// A sample comes from scraping/apis-data-all.json; a pasted URL is scraped.
+async function gatherArticles() {
+  if (activeTab === "preset") {
+    const id = selectedSampleId();
+    if (!id) throw new Error("Pick one of the sample articles first.");
+    setStatus("Loading sample…", false, true);
+    const article = await loadSample(id);
+    renderOriginals([article]);
+    return [article];
+  }
+
   const urls = selectedUrls();
-  if (!urls.length) return setStatus(activeTab === "preset" ? "Pick one of the sample articles first." : "Paste a detik.com article URL first.", true, false);
-
-  setBusy(true);
-  placeholder(genCol, "Generated English output will appear here.");
-  placeholder(origCol, "Scraping…");
-  origOpen = [];
-
+  if (!urls.length) throw new Error("Paste a detik.com article URL first.");
   const articles = [];
   for (const [i, url] of urls.entries()) {
     setStatus(`Scraping detik.com… (${i + 1}/${urls.length})`, false, true);
-    try {
-      const { article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`);
-      articles.push(article);
-      renderOriginals(articles);
-    } catch (e) {
-      placeholder(origCol, `Could not scrape ${i === 0 ? "the main article" : "article " + (i + 1)}.`);
-      setStatus(e.message, true, false);
-      return setBusy(false);
-    }
+    const { article } = await api(`/api/scrape?url=${encodeURIComponent(url)}`);
+    articles.push(article);
+    renderOriginals(articles);
+  }
+  return articles;
+}
+
+async function generateNewArticle() {
+  setBusy(true);
+  placeholder(genCol, "Generated English output will appear here.");
+  origOpen = [];
+
+  let articles;
+  try {
+    articles = await gatherArticles();
+  } catch (e) {
+    placeholder(origCol, activeTab === "preset" ? "Could not load the sample." : "Could not scrape the source articles.");
+    setStatus(e.message, true, false);
+    return setBusy(false);
   }
 
   setStatus(

@@ -1,9 +1,10 @@
 """Small stdlib web server for previewing an article and generating its
 English rewrite side by side.
 
-Input is one to five pasted detik.com article URLs, scraped on demand. The first
-one is the main article (anchor); the rest only enrich it, and the output keeps
-the same fields either way. Nothing here calls apis.detik.com.
+Input is one to five pasted detik.com article URLs, scraped on demand, or one of
+the curated samples read straight from scraping/apis-data-all.json — those are
+scraped. The first article is the main one (anchor); the rest only enrich it, and
+the output keeps the same fields either way. Nothing here calls apis.detik.com.
 
 Reuses the existing modules:
   - scraping.scraper     -> scrape_article()        (detik.com URL -> article dict)
@@ -33,6 +34,10 @@ from generation.news import MAX_SOURCE_ARTICLES
 from scraping.scraper import ScrapeError, scrape_article
 
 WEB_DIR = Path(__file__).parent
+ROOT = WEB_DIR.parent
+# The curated articles behind the "Pick a sample" tab, in the shape the
+# generator already expects — the same file generation.articles batches over.
+SAMPLES_PATH = ROOT / "scraping/apis-data-all.json"
 
 load_dotenv()
 BASIC_AUTH_USER = os.getenv("BASIC_AUTH_USER", "")
@@ -110,6 +115,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/healthz":
             return self._send_json(200, {"status": "ok"})
 
+        if parsed.path == "/api/sample":
+            article_id = (parse_qs(parsed.query).get("id") or [""])[0].strip()
+            return self._handle_sample(article_id)
+
         if parsed.path == "/api/scrape":
             url = (parse_qs(parsed.query).get("url") or [""])[0].strip()
             return self._handle_scrape(url)
@@ -156,6 +165,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(502, {"error": f"{type(e).__name__}: {e}"})
 
         return self._send_json(200, {"generated": generated, "usage": usage})
+
+    def _handle_sample(self, article_id):
+        """One curated article by id, straight from the JSON — no scraping."""
+        if not article_id:
+            return self._send_json(400, {"error": "provide a sample id"})
+        try:
+            samples = json.loads(SAMPLES_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            traceback.print_exc()
+            return self._send_json(502, {"error": f"could not read samples: {e}"})
+        article = next((a for a in samples if str(a.get("id")) == article_id), None)
+        if article is None:
+            return self._send_json(404, {"error": f"no sample with id {article_id}"})
+        return self._send_json(200, {"article": article})
 
     def _handle_scrape(self, url):
         try:
