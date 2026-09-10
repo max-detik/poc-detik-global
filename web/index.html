@@ -119,6 +119,18 @@
   .usage{margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--muted);}
   .spinner{display:inline-block;width:12px;height:12px;border:2px solid #c7d4f2;border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px;}
   @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* Page-level switcher: "Generate New Article" vs "Enrich Article". */
+  .pagetabs{display:flex;gap:4px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--border);flex:0 0 auto;}
+  .pagetab{font:inherit;font-size:13px;font-weight:600;padding:10px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);cursor:pointer;}
+  .pagetab:hover{color:var(--navy);}
+  .pagetab.active{color:var(--navy);border-bottom-color:var(--navy);}
+  .page{display:none;flex:1 1 auto;flex-direction:column;min-height:0;}
+  .page.active{display:flex;}
+  .ecols{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1400px;margin:0 auto;align-items:start;}
+  @media (max-width:900px){ .ecols{grid-template-columns:1fr;} }
+  .tldr-list{margin:0;padding-left:18px;font-size:14px;line-height:1.6;}
+  .tldr-list li{margin-bottom:6px;}
 </style>
 </head>
 <body>
@@ -127,6 +139,12 @@
   <p>Paste up to 5 detik.com article URLs. The first is the main article (anchor) — it sets the story, angle and structure; the rest only add supporting facts. The Indonesian sources are scraped and one English article generated, side by side.</p>
 </header>
 
+<nav class="pagetabs" role="tablist" aria-label="Tool">
+  <button class="pagetab active" type="button" role="tab" data-page="generate" aria-selected="true">Generate New Article</button>
+  <button class="pagetab" type="button" role="tab" data-page="enrich" aria-selected="false">Enrich Article (TL;DR / Takeaways / FAQ)</button>
+</nav>
+
+<div class="page active" id="page-generate">
 <div class="toolbar">
   <div class="tabs" role="tablist">
     <button class="tab active" type="button" role="tab" data-tab="input" aria-selected="true">Paste URL</button>
@@ -186,6 +204,70 @@
     <div id="genCol" class="col placeholder">Generated English output will appear here.</div>
   </div>
 </main>
+</div>
+
+<div class="page" id="page-enrich">
+<div class="toolbar">
+  <div class="tabs" role="tablist">
+    <button class="tab active" type="button" role="tab" data-etab="input" aria-selected="true">Paste URL</button>
+    <button class="tab" type="button" role="tab" data-etab="preset" aria-selected="false">Pick a sample</button>
+  </div>
+
+  <div class="panel active" id="epanel-input" role="tabpanel">
+    <div class="urls">
+      <div class="url-row">
+        <span class="flag flag-main">Article</span>
+        <input type="url" id="eUrlInput" autocomplete="off" spellcheck="false" placeholder="https://…detik.com/…/d-8615053/…">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="epanel-preset" role="tabpanel">
+    <div class="presets" role="radiogroup" aria-label="Sample articles">
+      <label class="preset">
+        <input type="radio" name="ePresetId" value="8604738" checked>
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">detikBali</span>
+        <span class="t">Misteri pria tewas telanjang di penginapan usai check-in dengan perempuan</span>
+        <span class="u">detik.com/bali/nusra/d-8604738</span>
+      </label>
+      <label class="preset">
+        <input type="radio" name="ePresetId" value="8606706">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">Wolipop · Worklife</span>
+        <span class="t">Viral alumni SMA Bogor pamer pindah ke AS demi kejar mimpi, faktanya ternyata</span>
+        <span class="u">wolipop.detik.com/worklife/d-8606706</span>
+      </label>
+      <label class="preset">
+        <input type="radio" name="ePresetId" value="8605519">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">detikNews · Berita</span>
+        <span class="t">Jangan salah sangka, ternyata ini cerita di balik nama Kelurahan Bencongan</span>
+        <span class="u">news.detik.com/berita/d-8605519</span>
+      </label>
+      <label class="preset">
+        <input type="radio" name="ePresetId" value="8606892">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="src">detikInet · Cyberlife</span>
+        <span class="t">Toko mie tutup permanen dan bagi resep rahasia: bisnis FnB rapuh review</span>
+        <span class="u">inet.detik.com/cyberlife/d-8606892</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="enrichBtn" class="primary" type="button">Generate &amp; Enrich</button>
+    <span id="eStatus" class="status"></span>
+  </div>
+</div>
+
+<main>
+  <div class="ecols">
+    <div id="eGenCol" class="col placeholder">Generated English article will appear here.</div>
+    <div id="eResultCol" class="col placeholder">TL;DR / Takeaways / FAQ will appear here.</div>
+  </div>
+</main>
+</div>
 
 <script>
 const MAX_ARTICLES = 5;
@@ -193,7 +275,7 @@ const $ = (id) => document.getElementById(id);
 const generateBtn = $("generateBtn"), addUrlBtn = $("addUrlBtn");
 const urlRows = $("urlRows"), urlHint = $("urlHint");
 const statusEl = $("status"), origCol = $("origCol"), genCol = $("genCol");
-const tabs = document.querySelectorAll(".tab");
+const tabs = document.querySelectorAll("#page-generate .tab");
 let activeTab = "input";
 
 tabs.forEach((tab) => tab.addEventListener("click", () => {
@@ -584,6 +666,254 @@ async function generateNewArticle() {
 generateBtn.addEventListener("click", generateNewArticle);
 urlRows.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.matches("input")) generateNewArticle();
+});
+
+// ===== Page switcher: "Generate New Article" vs "Enrich Article" =====
+function switchPage(name) {
+  document.querySelectorAll(".pagetab").forEach((b) => {
+    const on = b.dataset.page === name;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", String(on));
+    document.getElementById("page-" + b.dataset.page).classList.toggle("active", on);
+  });
+}
+
+document.querySelectorAll(".pagetab").forEach((btn) => btn.addEventListener("click", () => switchPage(btn.dataset.page)));
+
+// ===== Enrich Article: PoC pipeline — a URL/sample goes to the backend, which
+// scrapes, generates the English article, and enriches it (TL;DR / Takeaways /
+// FAQ) in one call. Only the English result and its enrichment are shown here;
+// the Indonesian original is never displayed on this tab.
+const enrichBtn = $("enrichBtn"), eUrlInput = $("eUrlInput");
+const eStatus = $("eStatus"), eGenCol = $("eGenCol"), eResultCol = $("eResultCol");
+let eActiveTab = "input";
+let lastEnrichResult = null;
+
+document.querySelectorAll("#page-enrich .tab").forEach((tab) => tab.addEventListener("click", () => {
+  if (enrichBtn.disabled) return;
+  eActiveTab = tab.dataset.etab;
+  document.querySelectorAll("#page-enrich .tab").forEach((t) => {
+    const on = t === tab;
+    t.classList.toggle("active", on);
+    t.setAttribute("aria-selected", String(on));
+    $("epanel-" + t.dataset.etab).classList.toggle("active", on);
+  });
+}));
+
+function eSelectedSampleId() {
+  const picked = document.querySelector('input[name="ePresetId"]:checked');
+  return picked ? picked.value : "";
+}
+
+function setEStatus(msg, isError, busy) {
+  eStatus.className = "status" + (isError ? " error" : "");
+  eStatus.innerHTML = busy ? '<span class="spinner"></span>' : "";
+  eStatus.append(msg || "");
+}
+
+function eSetBusy(busy) {
+  enrichBtn.disabled = busy;
+  eUrlInput.disabled = busy;
+  document.querySelectorAll('input[name="ePresetId"]').forEach((r) => { r.disabled = busy; });
+}
+
+// The request body for /api/enrich: a pasted URL (scraped server-side) or a
+// pre-fetched sample article (/api/sample, same shape /api/generate takes).
+async function buildEnrichPayload() {
+  if (eActiveTab === "preset") {
+    const id = eSelectedSampleId();
+    if (!id) throw new Error("Pick one of the sample articles first.");
+    setEStatus("Loading sample…", false, true);
+    const article = await loadSample(id);
+    return { article };
+  }
+
+  const url = eUrlInput.value.trim();
+  if (!url) throw new Error("Paste a detik.com article URL first.");
+  return { url };
+}
+
+// Renders the generated English article the same way the Generate tab does
+// (same GEN_FIELDS), but into eGenCol with its own scoped copy handling.
+function eControlFor(key) {
+  return eGenCol.querySelector(`[data-field="${key}"]`);
+}
+
+function eCopyValue(key, control) {
+  const field = GEN_FIELDS.find((f) => f.key === key);
+  return field && field.html ? htmlToText(control.value) : control.value;
+}
+
+function renderEnrichGenerated(g, usage) {
+  const u = usage || {};
+  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
+  eGenCol.className = "col gen";
+  eGenCol.innerHTML = `
+    <div class="badge badge-gen">Generated (EN)</div>
+    <div class="form">
+      ${GEN_FIELDS.map((f) => fieldMarkup(f, fieldValue(g, f))).join("")}
+      <div class="form-actions">
+        <button class="copy" type="button" data-copy-all="1">Copy all fields</button>
+        <span class="hint">Edit any field before copying — changes stay in the browser.</span>
+      </div>
+    </div>
+    <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
+      (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+  eGenCol.querySelectorAll("textarea").forEach((ta) => {
+    autoGrow(ta);
+    ta.addEventListener("input", () => autoGrow(ta));
+  });
+}
+
+eGenCol.addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  if (btn.dataset.copy) {
+    const control = eControlFor(btn.dataset.copy);
+    if (control) copyText(eCopyValue(btn.dataset.copy, control), btn);
+    return;
+  }
+
+  if (btn.dataset.copyAll) {
+    const text = GEN_FIELDS.map((f) => {
+      const control = eControlFor(f.key);
+      return `${f.label}:\n${control ? eCopyValue(f.key, control) : ""}`;
+    }).join("\n\n");
+    copyText(text, btn);
+    return;
+  }
+
+  if (btn.classList.contains("toggle")) {
+    const field = btn.closest(".field");
+    const on = field.classList.toggle("previewing");
+    btn.textContent = on ? "Edit HTML" : "Preview";
+    if (on) field.querySelector(".preview .content").innerHTML = field.querySelector("textarea").value;
+    else autoGrow(field.querySelector("textarea"));
+  }
+});
+
+const DIAG_LABELS = {
+  tldr_spec_issues: "TL;DR spec issues",
+  tldr_grounding_flags: "TL;DR grounding flags",
+  takeaway_spec_issues: "Takeaway spec issues",
+  takeaway_grounding_flags: "Takeaway grounding flags",
+  faq_spec_issues: "FAQ spec issues",
+  faq_grounding_flags: "FAQ grounding flags",
+};
+
+function renderEnrichment(result, usage) {
+  const d = result.diagnostics || {};
+  const u = usage || {};
+  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
+
+  const tldrHtml = result.tldr
+    .map((b) => `<li>${esc(b)} <span class="hint">(${b.length} chars)</span></li>`)
+    .join("");
+
+  const faqHtml = result.faq
+    .map((qa, i) => `
+      <div class="field">
+        <div class="field-head">
+          <label>Q${i + 1}</label>
+          <span class="field-tools"><button class="copy" type="button" data-copy-faq="${i}">Copy</button></span>
+        </div>
+        <div class="meta"><b>Q:</b> ${esc(qa.question)}</div>
+        <textarea rows="2" readonly>${esc(qa.answer)}</textarea>
+        <div class="meta"><b>Evidence:</b> ${esc(qa.evidence)}</div>
+      </div>`)
+    .join("");
+
+  const diagLines = Object.entries(d)
+    .filter(([, v]) => Array.isArray(v) && v.length)
+    .map(([k, v]) => `<div class="meta"><b>${esc(DIAG_LABELS[k] || k)}:</b> ${esc(v.join(" | "))}</div>`)
+    .join("");
+
+  eResultCol.className = "col gen";
+  eResultCol.innerHTML = `
+    <div class="badge badge-gen">Output — TL;DR / Takeaways / FAQ (EN)</div>
+    <div class="form">
+      <div class="field">
+        <div class="field-head">
+          <label>TL;DR</label>
+          <span class="field-tools"><button class="copy" type="button" data-copy-tldr="1">Copy</button></span>
+        </div>
+        <ul class="tldr-list">${tldrHtml}</ul>
+      </div>
+      <div class="field">
+        <div class="field-head">
+          <label>Key Takeaway</label>
+          <span class="field-tools"><button class="copy" type="button" data-copy-takeaway="1">Copy</button></span>
+        </div>
+        <textarea rows="2" readonly>${esc(result.key_takeaway)}</textarea>
+      </div>
+      <div class="field">
+        <div class="field-head"><label>FAQ</label></div>
+        ${faqHtml}
+      </div>
+    </div>
+    <div class="metadata">
+      <h3>QA diagnostics (heuristic — not a substitute for manual review)</h3>
+      ${diagLines || '<div class="meta">No spec or grounding issues flagged.</div>'}
+    </div>
+    <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
+      (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+  eResultCol.querySelectorAll("textarea").forEach((ta) => autoGrow(ta));
+}
+
+eResultCol.addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn || !lastEnrichResult) return;
+
+  if (btn.dataset.copyTldr) {
+    copyText(lastEnrichResult.tldr.join("\n"), btn);
+  } else if (btn.dataset.copyTakeaway) {
+    copyText(lastEnrichResult.key_takeaway, btn);
+  } else if (btn.dataset.copyFaq !== undefined) {
+    const qa = lastEnrichResult.faq[Number(btn.dataset.copyFaq)];
+    copyText(`Q: ${qa.question}\nA: ${qa.answer}`, btn);
+  }
+});
+
+async function generateEnrichment() {
+  eSetBusy(true);
+  placeholder(eGenCol, "Generated English article will appear here.");
+  placeholder(eResultCol, "TL;DR / Takeaways / FAQ will appear here.");
+  lastEnrichResult = null;
+
+  let payload;
+  try {
+    payload = await buildEnrichPayload();
+  } catch (e) {
+    setEStatus(e.message, true, false);
+    return eSetBusy(false);
+  }
+
+  setEStatus("Scraping, translating and enriching… this can take a while.", false, true);
+  placeholder(eGenCol, "Generating…");
+  placeholder(eResultCol, "Generating…");
+  try {
+    const { generated, result, usage } = await api("/api/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    renderEnrichGenerated(generated, usage.generate);
+    lastEnrichResult = result;
+    renderEnrichment(result, usage.enrich);
+    setEStatus("Done.", false, false);
+  } catch (e) {
+    placeholder(eGenCol, "Generation failed.");
+    placeholder(eResultCol, "Generation failed.");
+    setEStatus(e.message, true, false);
+  } finally {
+    eSetBusy(false);
+  }
+}
+
+enrichBtn.addEventListener("click", generateEnrichment);
+eUrlInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") generateEnrichment();
 });
 </script>
 </body>

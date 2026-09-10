@@ -30,6 +30,7 @@ from urllib.parse import urlparse, parse_qs
 from dotenv import load_dotenv
 
 from generation.articles import generate_from_articles
+from generation.enrichment import generate_enrichment
 from generation.news import MAX_SOURCE_ARTICLES
 from scraping.scraper import ScrapeError, scrape_article
 
@@ -43,6 +44,30 @@ load_dotenv()
 BASIC_AUTH_USER = os.getenv("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASS = os.getenv("BASIC_AUTH_PASS", "")
 AUTH_REALM = "detikGlobal"
+
+
+def _articles_from_payload(payload):
+    """Scraped/sample source articles from a /api/generate-style payload.
+
+    Accepts `articles` (already-fetched dicts) or `urls`/`url` to scrape — the
+    first is the main article/anchor, the rest only enrich it. Shared by
+    /api/generate and /api/enrich so both accept the same request shape.
+    Raises ScrapeError (bad url) or ValueError (no/too many articles).
+    """
+    articles = payload.get("articles") or ([payload["article"]] if payload.get("article") else [])
+    urls = payload.get("urls") or []
+    if not urls and payload.get("url"):
+        urls = [payload["url"]]
+
+    if not articles:
+        for url in urls:
+            articles.append(scrape_article(str(url).strip()))
+
+    if not articles:
+        raise ValueError("provide an article or a detik.com url")
+    if len(articles) > MAX_SOURCE_ARTICLES:
+        raise ValueError(f"at most {MAX_SOURCE_ARTICLES} articles are supported")
+    return articles
 
 
 def check_credentials(header_value):
@@ -129,7 +154,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
 
-        if urlparse(self.path).path != "/api/generate":
+        path = urlparse(self.path).path
+        if path == "/api/enrich":
+            return self._handle_enrich()
+
+        if path != "/api/generate":
             return self._send_json(404, {"error": "not found"})
 
         try:
@@ -137,26 +166,10 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return self._send_json(400, {"error": "invalid JSON body"})
 
-        # The first entry is the main article (anchor); the rest only enrich it.
-        # `article`/`url` (singular) stay accepted for older callers.
-        articles = payload.get("articles") or ([payload["article"]] if payload.get("article") else [])
-        urls = payload.get("urls") or []
-        if not urls and payload.get("url"):
-            urls = [payload["url"]]
-
-        if not articles:
-            for url in urls:
-                try:
-                    articles.append(scrape_article(str(url).strip()))
-                except ScrapeError as e:
-                    return self._send_json(400, {"error": str(e)})
-
-        if not articles:
-            return self._send_json(400, {"error": "provide an article or a detik.com url"})
-        if len(articles) > MAX_SOURCE_ARTICLES:
-            return self._send_json(
-                400, {"error": f"at most {MAX_SOURCE_ARTICLES} articles are supported"}
-            )
+        try:
+            articles = _articles_from_payload(payload)
+        except (ScrapeError, ValueError) as e:
+            return self._send_json(400, {"error": str(e)})
 
         try:
             generated, usage = generate_from_articles(articles)
@@ -189,6 +202,35 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             return self._send_json(502, {"error": f"{type(e).__name__}: {e}"})
         return self._send_json(200, {"article": article})
+
+    def _handle_enrich(self):
+        """POC pipeline for the Enrich Article tab: scrape/sample -> generate the
+        English article -> TL;DR/Key Takeaway/FAQ off that English result, in one
+        call. Unlike /api/generate, the original Indonesian article is never
+        returned — only the generated English article and its enrichment.
+        """
+        try:
+            payload = self._read_json_body()
+        except json.JSONDecodeError:
+            return self._send_json(400, {"error": "invalid JSON body"})
+
+        try:
+            articles = _articles_from_payload(payload)
+        except (ScrapeError, ValueError) as e:
+            return self._send_json(400, {"error": str(e)})
+
+        try:
+            generated, generate_usage = generate_from_articles(articles)
+            result, enrich_usage = generate_enrichment(generated.get("title", ""), generated.get("content", ""))
+        except Exception as e:
+            traceback.print_exc()
+            return self._send_json(502, {"error": f"{type(e).__name__}: {e}"})
+
+        return self._send_json(200, {
+            "generated": generated,
+            "result": result,
+            "usage": {"generate": generate_usage, "enrich": enrich_usage},
+        })
 
 
 def main():
