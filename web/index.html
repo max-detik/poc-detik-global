@@ -259,6 +259,9 @@
     <button id="enrichBtn" class="primary" type="button">Generate &amp; Enrich</button>
     <span id="eStatus" class="status"></span>
   </div>
+  <div class="row">
+    <span id="eSessionStats" class="hint"></span>
+  </div>
 </div>
 
 <main>
@@ -389,6 +392,12 @@ function placeholder(el, text) {
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function formatUsage(u) {
+  u = u || {};
+  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
+  return `Tokens: ${esc(u.total_tokens ?? "n/a")} (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}`;
 }
 
 // The API may return content as raw HTML or as HTML-entity-escaped text.
@@ -530,7 +539,6 @@ async function copyText(text, btn) {
 
 function renderGenerated(g, usage) {
   const u = usage || g.usage || {};
-  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
   genCol.className = "col gen";
   genCol.innerHTML = `
     <div class="badge badge-gen">Output — Generated (EN)</div>
@@ -541,8 +549,7 @@ function renderGenerated(g, usage) {
         <span class="hint">Edit any field before copying — changes stay in the browser.</span>
       </div>
     </div>
-    <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
-      (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+    <div class="usage">${formatUsage(u)}</div>`;
   genCol.querySelectorAll("textarea").forEach((ta) => {
     autoGrow(ta);
     ta.addEventListener("input", () => autoGrow(ta));
@@ -686,8 +693,38 @@ document.querySelectorAll(".pagetab").forEach((btn) => btn.addEventListener("cli
 // the Indonesian original is never displayed on this tab.
 const enrichBtn = $("enrichBtn"), eUrlInput = $("eUrlInput");
 const eStatus = $("eStatus"), eGenCol = $("eGenCol"), eResultCol = $("eResultCol");
+const eSessionStats = $("eSessionStats");
 let eActiveTab = "input";
 let lastEnrichResult = null;
+
+// Running per-run cost/token average for this browser session (generate + enrich
+// combined), so cost-per-article can be read off directly while evaluating —
+// resets on page reload, not persisted.
+const enrichSession = { runs: 0, totalTokens: 0, totalCost: 0 };
+
+function recordEnrichRun(generateUsage, enrichUsage) {
+  const g = generateUsage || {};
+  const e = enrichUsage || {};
+  enrichSession.runs += 1;
+  enrichSession.totalTokens += (g.total_tokens || 0) + (e.total_tokens || 0);
+  enrichSession.totalCost += (g.cost || 0) + (e.cost || 0);
+  renderEnrichSessionStats();
+}
+
+function renderEnrichSessionStats() {
+  const s = enrichSession;
+  if (!s.runs) {
+    eSessionStats.textContent = "";
+    return;
+  }
+  const avgTokens = s.totalTokens / s.runs;
+  const avgCost = s.totalCost / s.runs;
+  eSessionStats.innerHTML =
+    `Session: ${s.runs} run${s.runs === 1 ? "" : "s"} (generate + enrich) &nbsp;|&nbsp; ` +
+    `total $${s.totalCost.toFixed(6)} (${s.totalTokens} tok) &nbsp;|&nbsp; ` +
+    `avg $${avgCost.toFixed(6)}/run (${Math.round(avgTokens)} tok) &nbsp;|&nbsp; ` +
+    `projected $${(avgCost * 1000).toFixed(4)} per 1,000 articles`;
+}
 
 document.querySelectorAll("#page-enrich .tab").forEach((tab) => tab.addEventListener("click", () => {
   if (enrichBtn.disabled) return;
@@ -746,7 +783,6 @@ function eCopyValue(key, control) {
 
 function renderEnrichGenerated(g, usage) {
   const u = usage || {};
-  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
   eGenCol.className = "col gen";
   eGenCol.innerHTML = `
     <div class="badge badge-gen">Generated (EN)</div>
@@ -757,8 +793,7 @@ function renderEnrichGenerated(g, usage) {
         <span class="hint">Edit any field before copying — changes stay in the browser.</span>
       </div>
     </div>
-    <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
-      (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+    <div class="usage">${formatUsage(u)}</div>`;
   eGenCol.querySelectorAll("textarea").forEach((ta) => {
     autoGrow(ta);
     ta.addEventListener("input", () => autoGrow(ta));
@@ -805,7 +840,6 @@ const DIAG_LABELS = {
 function renderEnrichment(result, usage) {
   const d = result.diagnostics || {};
   const u = usage || {};
-  const cost = u.cost != null ? `$${Number(u.cost).toFixed(6)}` : "n/a";
 
   const tldrHtml = result.tldr
     .map((b) => `<li>${esc(b)} <span class="hint">(${b.length} chars)</span></li>`)
@@ -856,8 +890,9 @@ function renderEnrichment(result, usage) {
       <h3>QA diagnostics (heuristic — not a substitute for manual review)</h3>
       ${diagLines || '<div class="meta">No spec or grounding issues flagged.</div>'}
     </div>
-    <div class="usage">Tokens: ${esc(u.total_tokens ?? "n/a")}
-      (in ${esc(u.input_tokens ?? "n/a")} / out ${esc(u.output_tokens ?? "n/a")}) &nbsp;|&nbsp; Cost: ${cost}</div>`;
+    <div class="usage">
+      ${formatUsage(u)}
+    </div>`;
   eResultCol.querySelectorAll("textarea").forEach((ta) => autoGrow(ta));
 }
 
@@ -901,6 +936,7 @@ async function generateEnrichment() {
     renderEnrichGenerated(generated, usage.generate);
     lastEnrichResult = result;
     renderEnrichment(result, usage.enrich);
+    recordEnrichRun(usage.generate, usage.enrich);
     setEStatus("Done.", false, false);
   } catch (e) {
     placeholder(eGenCol, "Generation failed.");

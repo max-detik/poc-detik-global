@@ -1,12 +1,19 @@
 """TL;DR, Key Takeaway, and FAQ generation from an article's title and content.
 
-generate_enrichment() runs all three prompts over the same title/content and returns
-them together with lightweight QA diagnostics: a spec check per section (the length/count
-constraints the response schema doesn't strictly guarantee) and a grounding check (a
-low word-overlap heuristic that flags a generated string as possibly unmoored from the
-source — not a substitute for manual review).
+generate_enrichment() makes ONE call for all three outputs. They used to be three
+separate calls, but that meant paying for the article content — and overlapping
+system-prompt boilerplate — three times over. One combined prompt/schema cuts that
+duplicated input-token cost roughly in half and replaces three sequential round trips
+with one. The tradeoff: there's now a single usage total for the whole enrichment
+step rather than one per field, and the three prompts can no longer be tuned
+independently.
 
-Separate from news.py and keywords_category.py: different prompts, different schemas,
+Returns lightweight QA diagnostics alongside the result: a spec check per section (the
+length/count constraints the response schema doesn't strictly guarantee) and a
+grounding check (a low word-overlap heuristic that flags a generated string as possibly
+unmoored from the source — not a substitute for manual review).
+
+Separate from news.py and keywords_category.py: different prompt, different schema,
 and — unlike those two — this reads a single already-written article (source language
 either Indonesian or English) rather than merging multiple sources. The shared
 OpenRouter plumbing is in llm.py.
@@ -38,27 +45,21 @@ GROUNDING_MIN_WORD_LEN = 5
 GROUNDING_THRESHOLD = 3
 
 
-class TldrSchema(BaseModel):
-    tldr: List[str] = Field(
-        min_length=TLDR_BULLETS,
-        max_length=TLDR_BULLETS,
-        description=f"exactly {TLDR_BULLETS} narrative bullet points, each <= {TLDR_MAX_CHARS} characters",
-    )
-
-
-class TakeawaySchema(BaseModel):
-    key_takeaway: str = Field(
-        ..., description=f"exactly one sentence, may be long, <= {TAKEAWAY_MAX_CHARS} characters"
-    )
-
-
 class FaqItem(BaseModel):
     question: str = Field(..., description="phrased the way a reader would search on Google")
     evidence: str = Field(..., description="short paraphrase of the article part supporting the answer")
     answer: str = Field(..., max_length=FAQ_ANSWER_MAX_CHARS, description="1-2 sentences, factual")
 
 
-class FaqSchema(BaseModel):
+class EnrichmentSchema(BaseModel):
+    tldr: List[str] = Field(
+        min_length=TLDR_BULLETS,
+        max_length=TLDR_BULLETS,
+        description=f"exactly {TLDR_BULLETS} narrative bullet points, each <= {TLDR_MAX_CHARS} characters",
+    )
+    key_takeaway: str = Field(
+        ..., description=f"exactly one sentence, may be long, <= {TAKEAWAY_MAX_CHARS} characters"
+    )
     faq: List[FaqItem] = Field(
         min_length=FAQ_MIN_ITEMS,
         max_length=FAQ_MAX_ITEMS,
@@ -70,17 +71,17 @@ def _user_message(title, content):
     return f"Title: {title}\n\nFull content:\n{content}"
 
 
-def _call(prompt_name, schema, title, content):
+def _call(title, content):
     api = client()
     messages = [
-        {"role": "system", "content": load_prompt(prompt_name)},
+        {"role": "system", "content": load_prompt("enrichment")},
         {"role": "user", "content": _user_message(title, content)},
     ]
     response = api.responses.parse(
         model=OPENROUTER_MODEL,
         temperature=OPENROUTER_TEMPERATURE,
         input=messages,
-        text_format=schema,
+        text_format=EnrichmentSchema,
         reasoning=Reasoning(effort=OPENROUTER_REASONING_EFFORT),
         extra_body={"usage": {"include": True}},
     )
@@ -130,54 +131,21 @@ def check_faq_spec(faqs):
     return issues
 
 
-def generate_tldr(title, content):
-    """([bullet, bullet, bullet], token_usage)."""
-    result, usage = _call("tldr", TldrSchema, title, content)
-    return result["tldr"], usage
-
-
-def generate_takeaways(title, content):
-    """(sentence, token_usage)."""
-    result, usage = _call("takeaways", TakeawaySchema, title, content)
-    return result["key_takeaway"], usage
-
-
-def generate_faq(title, content):
-    """([{question, evidence, answer}, ...], token_usage)."""
-    result, usage = _call("faq", FaqSchema, title, content)
-    return result["faq"], usage
-
-
-def _add_usage(total, usage):
-    total["input_tokens"] += usage.get("input_tokens") or 0
-    total["output_tokens"] += usage.get("output_tokens") or 0
-    total["total_tokens"] += usage.get("total_tokens") or 0
-    total["cost"] = (total["cost"] or 0.0) + (usage.get("cost") or 0.0)
-
-
 def generate_enrichment(title, content):
-    """TL;DR, Key Takeaway, and FAQ for one article, plus QA diagnostics.
+    """TL;DR, Key Takeaway, and FAQ for one article, plus QA diagnostics, in one call.
 
     `title`/`content` are plain strings (content may be HTML), in any language.
     Returns (result, usage). `result` holds `tldr`, `key_takeaway`, `faq`, and a
     `diagnostics` dict of spec/grounding flags — heuristic checks run locally, not
-    extra model calls. `usage` sums tokens/cost across the three underlying calls.
+    extra model calls. `usage` is the single call's tokens/cost.
     """
     title = (title or "").strip()
     content = (content or "").strip()
     if not content:
         raise ValueError("content must not be empty")
 
-    usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost": 0.0}
-
-    tldr, tldr_usage = generate_tldr(title, content)
-    _add_usage(usage, tldr_usage)
-
-    key_takeaway, takeaway_usage = generate_takeaways(title, content)
-    _add_usage(usage, takeaway_usage)
-
-    faq, faq_usage = generate_faq(title, content)
-    _add_usage(usage, faq_usage)
+    parsed, usage = _call(title, content)
+    tldr, key_takeaway, faq = parsed["tldr"], parsed["key_takeaway"], parsed["faq"]
 
     diagnostics = {
         "tldr_spec_issues": check_tldr_spec(tldr),
