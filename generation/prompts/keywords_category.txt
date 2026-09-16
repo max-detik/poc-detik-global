@@ -10,20 +10,34 @@ articles to pick related stories). So a keyword is only useful if it can **recur
 articles**, spelled the same way.
 
 ## Language
-Keywords in the **same language as the content** — never mixed. Proper nouns keep their original
-form. Category labels are always copied from the fixed list below, whatever the language.
+**Every keyword you output is in English**, whatever language the content is written in — never
+the source language, never a mix of the two within the set or inside a single keyword. Render
+each term as an English-language article on the same subject would name it ("kenaikan harga bbm"
+→ "fuel price hike"; "sidang praperadilan" → "pretrial hearing").
+- **Proper nouns keep their original form** when that is how English coverage writes them: people
+("prabowo subianto"), clubs ("persib bandung"), companies, brands, places ("jakarta", "papua").
+- **Use the established English name** where one exists for an institution, title, place or event
+— that is the form another English article would match on ("DPR" → "house of representatives";
+"Kementerian Keuangan" → "ministry of finance"; "Jawa Barat" → "west java"; "Piala Dunia" →
+"world cup"). Keep a widely used acronym as the acronym ("kpk", "kcic") when English coverage
+does.
+- Translating is not inventing: the entity or topic must still be one the content carries — you
+are changing the language of a term, never adding a fact.
+
+Category labels are the single exception: they are **copied verbatim from the fixed list below**,
+never translated into English, whatever language the list gives them in.
 
 ## Keywords — 5 to 10 terms
 Each keyword is an **entity** or a **topic**, and the set needs both:
 - **Entities** — the named things the story is about: people, organisations, companies, clubs,
 brands, products, places, named events, laws, programmes. Name them the way the world does.
 - **Topics** — what the story is about as a subject: the issue, policy area, event type
-("kenaikan harga bbm", "transfer pemain", "banjir jakarta"). Without these the set only links
+("fuel price hike", "player transfer", "jakarta flooding"). Without these the set only links
 articles that share a name.
 
 Hit the middle band:
-- **Too general (reject)** — matches thousands of unrelated stories: "berita", "Indonesia",
-"pemerintah", "viral", "hari ini", a bare year.
+- **Too general (reject)** — matches thousands of unrelated stories: "news", "indonesia",
+"government", "viral", "today", a bare year.
 - **Too niche (reject)** — no other article will ever carry it: a full quote, a case number, a
 street address, an exact figure, someone named once in passing.
 - **Right band (keep)** — the central actors, institutions, places, events and issues, as a
@@ -35,9 +49,10 @@ Rules:
 facet five ways.
 3. **No duplication or nesting** — not the same term twice, not a plural/singular pair, not one
 contained in another ("Prabowo" vs "Prabowo Subianto": keep the more searchable).
-4. **Canonical form** — the common public name, not a one-off descriptor ("timnas indonesia",
-not "skuad garuda asuhan pelatih anyar"); base form over inflected. For acronyms use the form the
-content uses; given both ("Kereta Cepat Indonesia China (KCIC)"), the short form is better.
+4. **Canonical form** — the common public name, not a one-off descriptor ("indonesia national
+team", not "the garuda squad under its new coach"); base form over inflected. For acronyms use the
+form English coverage uses; given both ("Kereta Cepat Indonesia China (KCIC)"), the short form is
+better.
 5. **Lowercase, plain text** — no hashtags, no ALL CAPS beyond acronyms, no quotes, no pipe
 character (it is the field separator).
 6. **Most central first**; the score follows the same order.
@@ -91,7 +106,7 @@ Return JSON in exactly this shape:
     {
       "score": "float 0-1 - relevance of this keyword, descending across the array",
       "label": null,
-      "keyword": "string - the keyword phrase, lowercase"
+      "keyword": "string - the keyword phrase, in English, lowercase"
     }
   ]
 }
@@ -100,12 +115,15 @@ Return JSON in exactly this shape:
 - `keywords_auto`: 5 to 10 entries, most central first.
 - `tree_level1`, `tree_level2`, `id`, `label`: always `null`, filled downstream.
 - `categoryauto` repeats `categories_auto[0].leaf`; `keywordauto` is the keywords in order joined
-with `|`, e.g. `kata satu|kata dua|kata tiga`.
+with `|`, e.g. `keyword one|keyword two|keyword three`.
 
 ## Before finalizing, check:
-- 5-10 keywords, lowercase, in the content's language, mixing entities **and** topics; each
-grounded in the text, in the form another article on the subject would use; none too general,
-too niche, repeated, nested, or containing a pipe.
+- 5-10 keywords, lowercase, **all in English** even when the content is not — no source-language
+term left untranslated and no keyword mixing the two languages — mixing entities **and** topics;
+each grounded in the text, in the form another English article on the subject would use; none too
+general, too niche, repeated, nested, or containing a pipe.
+- Category labels left in the list's own wording, verbatim — the English rule never applies to
+them.
 - `categories_auto` holds {category_choices} different labels, each copied verbatim and none
 excluded by its own description, ordered best fit first with `rank` ascending and `score`
 descending; `categoryauto` matches the rank 1 `leaf`.
