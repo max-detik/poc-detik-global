@@ -21,6 +21,19 @@ each term as an English-language article on the same subject would name it ("ken
 "Kementerian Keuangan" → "ministry of finance"; "Jawa Barat" → "west java"; "Piala Dunia" →
 "world cup"). Keep a widely used acronym as the acronym ("kpk", "kcic") when English coverage
 does.
+- **Only the name itself is the proper noun — the Indonesian words around it are not.** Split
+every keyword into the name and the ordinary words attached to it. Keep the name exactly as
+written, and translate every ordinary word into the term English coverage would use:
+administrative units, geographic features, titles, roles, descriptors, event types, and the
+local offices of an institution such as police, courts and local government ("provinsi X" → "X
+province", "gunung X" → "mount X", "bupati X" → "X regent", "polres X" → "X police").
+- **A named entity stays as written, even when it doesn't look like one** — a person, place,
+brand or coined name, a nickname, or the parts of a name the story itself explains. Only
+translate what is not part of a name.
+- **Short lowercase keywords fail this most often**, because they look like labels that can pass
+through untranslated. Treat each keyword as a small translation of its own: a keyword left
+identical to the source's wording is correct only when all of it is a name or it is already
+English.
 - Translating is not inventing: the entity or topic must still be one the content carries — you
 are changing the language of a term, never adding a fact.
 
@@ -119,7 +132,8 @@ with `|`, e.g. `keyword one|keyword two|keyword three`.
 
 ## Before finalizing, check:
 - 5-10 keywords, lowercase, **all in English** even when the content is not — no source-language
-term left untranslated and no keyword mixing the two languages — mixing entities **and** topics;
+term left untranslated and no keyword mixing the two languages (every Indonesian word that is
+not part of a name translated, every name kept as written) — mixing entities **and** topics;
 each grounded in the text, in the form another English article on the subject would use; none too
 general, too niche, repeated, nested, or containing a pipe.
 - Category labels left in the list's own wording, verbatim — the English rule never applies to
