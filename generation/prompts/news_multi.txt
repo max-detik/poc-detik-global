@@ -18,6 +18,21 @@ twelve `image_cover_*`/`image_story_*` fields — the short mechanical ones incl
   Indonesian clause left in, not a tag list with some items translated and others not.
 - **Proper nouns stay as they are** (people, clubs, companies, brands, places): rule 5 governs
   them — retain, don't anglicize, and gloss institutions on first mention where needed.
+- **Only the name itself is the proper noun — the Indonesian words around it are not.** Split
+  every value into the name and the ordinary words attached to it. Keep the name exactly as
+  written, and translate every ordinary word into the English term English coverage would use:
+  administrative units, geographic features, titles, roles, descriptors, event types, and the
+  local offices of an institution such as police, courts and local government ("provinsi X" →
+  "X province", "gunung X" → "mount X", "bupati X" → "X regent", "polres X" → "X police"). An
+  institution, programme, event or region with an established English name takes that name
+  instead of the Indonesian one, and an Indonesian acronym becomes the English form English
+  coverage uses, where there is one.
+- **A named entity stays as written, even when it doesn't look like one** — a person, place,
+  brand or coined name, a nickname, or the parts of a name the story itself explains. Only
+  translate what is not part of a name.
+- **Tags and keywords fail this most often**, because short lowercase items look like labels
+  that can pass through untranslated. Treat each item as a small translation of its own: an
+  item left unchanged is correct only when all of it is a name or it is already English.
 - **An empty or missing source field stays empty** — there is nothing to translate, and an
   empty value is never filled with invented English text.
 
@@ -65,6 +80,17 @@ no expanding/tightening.
   and detail — don't tighten into punchier prose or expand with description the source
   doesn't include. A credit-style value like "Foto: Ayu" → "Photo: Ayu" (label translated,
   name unchanged).
+- **`image_cover_image_text` and `image_cover_alt_image`** are the anchor's "Image Caption" and
+  "Alt Image", translated in full. Go through the source value sentence by sentence and clause
+  by clause: every sentence, clause, person, place, date and credit in the source is in the
+  output, and nothing in the output is left in Indonesian except names. Never keep only the first
+  sentence, never summarize a long value into a short one, and never replace it with a
+  description taken from the article body. Translate the credit and photo labels too ("Foto:" →
+  "Photo:", "Ilustrasi" → "Illustration", "Dok." → "Documentation"), and keep the photographer and
+  outlet names unchanged ("(Ari Saputra/detikFoto)"). Write dates in the same international format
+  as `content`. An empty source value stays empty. Each field translates **its own** source
+  value — never copy the caption into the alt text or the alt text into the caption, even when
+  one is shorter.
 - **`title` is the one Track B field with a length limit** (see Output structure), so it's
   the one exception allowed to restructure — but only to compress, never to recompose the
   anchor headline's angle.
@@ -192,9 +218,11 @@ one-to-one to its anchor paragraph; each inserted paragraph carries genuinely ne
     the United States" (accurate facts, reads as routine relocation instead of a
     show-off-gone-wrong story). RIGHT: "...Alumnus Flaunts US Move, Then Comes the Twist" —
     the framing verb outranks a location, a date, or a secondary clause when space is tight.
-- **`tags`** — translated, same order; nothing invented/dropped/merged. **5–10 items
-  required**: if the anchor supplies fewer than 5, top up first from supporting-article tags
-  genuinely about the anchor's story, then from terms the anchor's own text clearly supports
+- **`tags`** — translated into English under the Language rules, item by item — an anchor tag
+  list copied through in Indonesian is the most common failure in this field. Same order;
+  nothing invented/dropped/merged, each tag **lowercase** (names and acronyms included). **5–10
+  items required**: if the anchor supplies fewer than 5, top up first from supporting-article
+  tags genuinely about the anchor's story, then from terms the anchor's own text clearly supports
   — appended after the anchor's own.
 - **`keywords_auto`** — the anchor's keywords, translated one-to-one, same order, **5–10
   items**, topped up the same way only if the anchor supplies fewer than 5. Each entry is an
@@ -262,14 +290,20 @@ Example shape (illustrative only):
 - `title`, `tags`, `keywords_auto`, and all twelve `image_cover_*`/`image_story_*` fields are
   faithful translations of the **anchor's** values — not rewritten, tightened, or expanded
   (beyond `title`'s length restructuring) — with 5–10 items in `tags`/`keywords_auto`.
-- Every `keywords_auto` entry is lowercase with `label: null` and a descending `score`, carries
+- Every `tags` item is lowercase. Every `keywords_auto` entry is lowercase with `label: null` and a descending `score`, carries
   no pipe character, and `keywordauto` is exactly those keywords in the same order joined with
   `|`.
 - The two `strdescription` fields keep their HTML tags intact, only inner text translated.
+- `image_cover_image_text` and `image_cover_alt_image` translate the **whole** anchor caption and
+  alt text: the same number of sentences, every clause and credit present, and no Indonesian word
+  left except names.
 - All "Baca juga"/"Tonton juga video" non-content blocks are dropped from `content`, with no
   actual reporting removed alongside them.
 - Is every one of the nineteen output fields in English, with no Indonesian left in a caption,
   alt-text, title-string, credit label, tag or keyword, and no value mixing the two languages —
-  proper nouns being the only thing kept in Indonesian?
+  proper nouns being the only thing kept in Indonesian? Re-read `tags` and `keywords_auto` item
+  by item: every Indonesian word that is not part of a name is translated, every name is kept
+  as written, and no Indonesian institution, programme or region name is left where an
+  established English form exists.
 - `content`'s raw-vs-escaped HTML encoding matches the anchor.
 """

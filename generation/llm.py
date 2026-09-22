@@ -93,14 +93,18 @@ def normalize_keywords(result):
     """Rebuild `keywordauto` from `keywords_auto` so the two can't disagree.
 
     The model is asked for both in the prompt, but the flat string is a pure
-    function of the array, so it is recomputed rather than trusted.
+    function of the array, so it is recomputed rather than trusted. Keywords and
+    tags are lowercased here too, since the prompt's casing rule isn't always
+    followed.
     """
     keywords = [
         keyword for keyword in (result.get("keywords_auto") or [])
         if (keyword.get("keyword") or "").strip()
     ]
     for keyword in keywords:
-        keyword["keyword"] = keyword["keyword"].strip()
+        keyword["keyword"] = keyword["keyword"].strip().lower()
     result["keywords_auto"] = keywords
     result["keywordauto"] = KEYWORD_SEPARATOR.join(k["keyword"] for k in keywords)
+    if "tags" in result:
+        result["tags"] = [tag.strip().lower() for tag in (result["tags"] or []) if tag.strip()]
     return result
