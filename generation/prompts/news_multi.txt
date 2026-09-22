@@ -80,6 +80,17 @@ no expanding/tightening.
   and detail — don't tighten into punchier prose or expand with description the source
   doesn't include. A credit-style value like "Foto: Ayu" → "Photo: Ayu" (label translated,
   name unchanged).
+- **`image_cover_image_text` and `image_cover_alt_image`** are the anchor's "Image Caption" and
+  "Alt Image", translated in full. Go through the source value sentence by sentence and clause
+  by clause: every sentence, clause, person, place, date and credit in the source is in the
+  output, and nothing in the output is left in Indonesian except names. Never keep only the first
+  sentence, never summarize a long value into a short one, and never replace it with a
+  description taken from the article body. Translate the credit and photo labels too ("Foto:" →
+  "Photo:", "Ilustrasi" → "Illustration", "Dok." → "Documentation"), and keep the photographer and
+  outlet names unchanged ("(Ari Saputra/detikFoto)"). Write dates in the same international format
+  as `content`. An empty source value stays empty. Each field translates **its own** source
+  value — never copy the caption into the alt text or the alt text into the caption, even when
+  one is shorter.
 - **`title` is the one Track B field with a length limit** (see Output structure), so it's
   the one exception allowed to restructure — but only to compress, never to recompose the
   anchor headline's angle.
@@ -207,9 +218,11 @@ one-to-one to its anchor paragraph; each inserted paragraph carries genuinely ne
     the United States" (accurate facts, reads as routine relocation instead of a
     show-off-gone-wrong story). RIGHT: "...Alumnus Flaunts US Move, Then Comes the Twist" —
     the framing verb outranks a location, a date, or a secondary clause when space is tight.
-- **`tags`** — translated, same order; nothing invented/dropped/merged, each tag
-  **lowercase** (names and acronyms included). **5–10 items required**: if the anchor supplies fewer than 5, top up first from supporting-article tags
-  genuinely about the anchor's story, then from terms the anchor's own text clearly supports
+- **`tags`** — translated into English under the Language rules, item by item — an anchor tag
+  list copied through in Indonesian is the most common failure in this field. Same order;
+  nothing invented/dropped/merged, each tag **lowercase** (names and acronyms included). **5–10
+  items required**: if the anchor supplies fewer than 5, top up first from supporting-article
+  tags genuinely about the anchor's story, then from terms the anchor's own text clearly supports
   — appended after the anchor's own.
 - **`keywords_auto`** — the anchor's keywords, translated one-to-one, same order, **5–10
   items**, topped up the same way only if the anchor supplies fewer than 5. Each entry is an
@@ -281,6 +294,9 @@ Example shape (illustrative only):
   no pipe character, and `keywordauto` is exactly those keywords in the same order joined with
   `|`.
 - The two `strdescription` fields keep their HTML tags intact, only inner text translated.
+- `image_cover_image_text` and `image_cover_alt_image` translate the **whole** anchor caption and
+  alt text: the same number of sentences, every clause and credit present, and no Indonesian word
+  left except names.
 - All "Baca juga"/"Tonton juga video" non-content blocks are dropped from `content`, with no
   actual reporting removed alongside them.
 - Is every one of the nineteen output fields in English, with no Indonesian left in a caption,
