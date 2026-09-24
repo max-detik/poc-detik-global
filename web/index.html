@@ -449,7 +449,6 @@ function originalCard(a, index, total, open) {
     <div class="metadata">
       <h3>Metadata</h3>
       <div class="meta"><b>Category:</b> ${esc(a.categoryauto) || "&mdash;"} &nbsp;|&nbsp; <b>Tags:</b> ${esc(tagList(a.tags || a.tag))}</div>
-      <div class="meta"><b>Keywords:</b> ${esc(tagList(a.keywordauto)) || "&mdash;"}</div>
       <div class="meta"><b>Image caption:</b> ${esc(cover.text) || "&mdash;"}</div>
       <div class="meta"><b>Alt image:</b> ${esc(cover.alt_image) || "&mdash;"}</div>
     </div>
@@ -476,8 +475,6 @@ const GEN_FIELDS = [
   { key: "summary", label: "Summary", type: "textarea", rows: 3 },
   { key: "content", label: "Content (HTML)", type: "textarea", rows: 12, html: true },
   { key: "tags", label: "Tags", type: "input", list: true },
-  // Already pipe-joined by the generator — shown as-is so it pastes into the CMS verbatim.
-  { key: "keywordauto", label: "Keywords", type: "input" },
   { key: "image_cover_image_text", label: "Image caption", type: "textarea", rows: 2 },
   { key: "image_cover_alt_image", label: "Alt image", type: "textarea", rows: 2 },
 ];

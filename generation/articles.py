@@ -30,7 +30,6 @@ def build_news_input(article):
         "content": article.get("content", ""),
         "resume": article.get("resume", ""),
         "tags": tags,
-        "keywordauto": article.get("keywordauto", ""),
         "categoryauto": article.get("categoryauto", ""),
         "image_cover_image_text": image_cover.get("text", ""),
         "image_cover_alt_image": image_cover.get("alt_image", ""),

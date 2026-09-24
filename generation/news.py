@@ -16,10 +16,9 @@ from generation.llm import (
     OPENROUTER_MODEL,
     OPENROUTER_REASONING_EFFORT,
     OPENROUTER_TEMPERATURE,
-    KeywordAuto,
     client,
     load_prompt,
-    normalize_keywords,
+    normalize_tags,
     parse_response,
 )
 from openai.types.shared_params import Reasoning
@@ -34,12 +33,6 @@ class ArticleSchema(BaseModel):
     summary: str = Field(..., max_length=140, description="summary of the article")
     content: str = Field(..., description="content of the article, as HTML.")
     tags: List[str] = Field(min_length=5, max_length=10, description="news tags of the article")
-    keywordauto: str = Field(..., description="all keywords joined with '|', no surrounding spaces")
-    # Same keyword shape as keywords_category.py, so both generators feed search
-    # and the content-based recommender with one format.
-    keywords_auto: List[KeywordAuto] = Field(
-        min_length=5, max_length=10, description="news keywords of the article, most central first"
-    )
     categoryauto: str = Field(..., description="news category of the article")
     image_cover_image_text: str = Field(..., description="rewritten caption of the image cover")
     image_cover_alt_image: str = Field(..., description="rewritten alt text of the image cover")
@@ -56,7 +49,6 @@ def _format_news(news, label):
     Tags: {news["tags"]}
     Image Caption: {news["image_cover_image_text"]}
     Alt Image: {news["image_cover_alt_image"]}
-    Keyword Auto: {news["keywordauto"]}
     Category Auto: {news["categoryauto"]}"""
 
 
@@ -69,8 +61,9 @@ def generate_news_multi(news_items):
     article is the same path with no supporting sources — a straight rewrite of
     the anchor.
 
-    Returns (article_dict, token_usage); article_dict follows ArticleSchema, with
-    `keywordauto` rebuilt from `keywords_auto`.
+    Returns (article_dict, token_usage); article_dict follows ArticleSchema.
+    Search keywords are not produced here — keywords_category.py derives those
+    from the generated content.
     """
     news_items = list(news_items)
     if not news_items:
@@ -115,8 +108,6 @@ def generate_news_multi(news_items):
 
     # Extract structured JSON from function_call
     article, usage = parse_response(response)
-    # `keywordauto` is a pure function of `keywords_auto`; rebuild it rather than
-    # trust the model to have joined the two consistently.
-    return normalize_keywords(article), usage
+    return normalize_tags(article), usage
 
 
