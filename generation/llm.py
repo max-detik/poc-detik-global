@@ -60,6 +60,18 @@ def parse_response(response):
     return response_output, token_usage
 
 
+def sum_usage(*usages):
+    """One token usage dict adding up several calls' usage; cost stays None if none reported it."""
+    total = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost": None}
+    for usage in usages:
+        usage = usage or {}
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            total[key] += usage.get(key) or 0
+        if usage.get("cost") is not None:
+            total["cost"] = (total["cost"] or 0.0) + usage["cost"]
+    return total
+
+
 # ---------- keyword metadata ----------
 
 # Both generators return keywords in the same shape: a scored array plus the flat

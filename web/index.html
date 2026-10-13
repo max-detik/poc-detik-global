@@ -115,6 +115,13 @@
   .field.previewing textarea{display:none;}
   .field.previewing .preview{display:block;}
   .field .preview .content{margin-top:0;}
+  /* Always-on preview under the keyword / Indonesian title fields. */
+  .kw-preview{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 8px;border:1px solid #c7d4f2;border-radius:12px;background:#f7f9ff;color:#1c2530;}
+  .chip .score{font-size:10px;font-weight:700;color:var(--blue);}
+  .chip .src{font-size:11px;color:var(--muted);}
+  .ref{font-size:12px;color:var(--muted);}
+  .ref b{color:var(--navy);font-weight:600;}
   .form-actions{display:flex;align-items:center;gap:10px;margin-top:4px;}
   .usage{margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--muted);}
   .spinner{display:inline-block;width:12px;height:12px;border:2px solid #c7d4f2;border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px;}
@@ -475,6 +482,12 @@ const GEN_FIELDS = [
   { key: "summary", label: "Summary", type: "textarea", rows: 3 },
   { key: "content", label: "Content (HTML)", type: "textarea", rows: 12, html: true },
   { key: "tags", label: "Tags", type: "input", list: true },
+  // Already pipe-joined by the generator — shown as-is so it pastes into the CMS verbatim.
+  // `chips` names the scored array behind a pipe-joined field; `source` pairs each
+  // Indonesian keyword with the English one it was translated from.
+  { key: "keywordauto", label: "Keywords", type: "input", chips: "keywords_auto" },
+  { key: "title_id", label: "Title (ID)", type: "input", ref: "title" },
+  { key: "keywordauto_id", label: "Keywords (ID)", type: "input", chips: "keywords_auto_id", source: "keywords_auto" },
   { key: "image_cover_image_text", label: "Image caption", type: "textarea", rows: 2 },
   { key: "image_cover_alt_image", label: "Alt image", type: "textarea", rows: 2 },
 ];
@@ -485,7 +498,39 @@ function fieldValue(g, f) {
   return String(g[f.key] ?? "");
 }
 
-function fieldMarkup(f, value) {
+// Chips for a pipe-joined keyword field, scored from the generator's array. Built
+// from the field's current text, so edits show up; a keyword typed in by hand
+// has no score. `source` is the English array, matched by position.
+function keywordChips(value, scored, source) {
+  const scores = new Map((scored || []).map((k) => [k.keyword, k.score]));
+  const english = (scored || []).map((k, i) => [k.keyword, (source || [])[i]?.keyword]);
+  const sourceOf = new Map(english);
+  const chips = String(value || "").split("|").map((k) => k.trim()).filter(Boolean).map((k) => {
+    const score = scores.has(k) ? `<span class="score">${Number(scores.get(k)).toFixed(2)}</span>` : "";
+    const src = source && sourceOf.get(k) && sourceOf.get(k) !== k ? `<span class="src">← ${esc(sourceOf.get(k))}</span>` : "";
+    return `<span class="chip">${esc(k)}${src}${score}</span>`;
+  });
+  return chips.join("") || `<span class="ref">No keywords.</span>`;
+}
+
+function livePreview(f, value, g) {
+  if (f.chips) {
+    const data = esc(JSON.stringify({ scored: g[f.chips] || [], source: f.source ? g[f.source] || [] : null }));
+    return `<div class="kw-preview" data-chips="${data}">${keywordChips(value, g[f.chips], f.source && g[f.source])}</div>`;
+  }
+  if (f.ref) return `<div class="ref"><b>EN:</b> ${esc(g[f.ref] ?? "")}</div>`;
+  return "";
+}
+
+// Keep a field's chip preview in step with edits to its input.
+function refreshChips(input) {
+  const preview = input.closest(".field")?.querySelector(".kw-preview");
+  if (!preview) return;
+  const { scored, source } = JSON.parse(preview.dataset.chips);
+  preview.innerHTML = keywordChips(input.value, scored, source);
+}
+
+function fieldMarkup(f, value, g = {}) {
   const control =
     f.type === "input"
       ? `<input type="text" data-field="${f.key}" value="${esc(value)}" spellcheck="false">`
@@ -502,6 +547,7 @@ function fieldMarkup(f, value) {
       </div>
       ${control}
       ${preview}
+      ${livePreview(f, value, g)}
     </div>`;
 }
 
@@ -540,7 +586,7 @@ function renderGenerated(g, usage) {
   genCol.innerHTML = `
     <div class="badge badge-gen">Output — Generated (EN)</div>
     <div class="form">
-      ${GEN_FIELDS.map((f) => fieldMarkup(f, fieldValue(g, f))).join("")}
+      ${GEN_FIELDS.map((f) => fieldMarkup(f, fieldValue(g, f), g)).join("")}
       <div class="form-actions">
         <button class="copy" type="button" data-copy-all="1">Copy all fields</button>
         <span class="hint">Edit any field before copying — changes stay in the browser.</span>
@@ -552,6 +598,10 @@ function renderGenerated(g, usage) {
     ta.addEventListener("input", () => autoGrow(ta));
   });
 }
+
+genCol.addEventListener("input", (e) => {
+  if (e.target.matches("input[data-field]")) refreshChips(e.target);
+});
 
 function controlFor(key) {
   return genCol.querySelector(`[data-field="${key}"]`);
@@ -769,6 +819,10 @@ async function buildEnrichPayload() {
 
 // Renders the generated English article the same way the Generate tab does
 // (same GEN_FIELDS), but into eGenCol with its own scoped copy handling.
+eGenCol.addEventListener("input", (e) => {
+  if (e.target.matches("input[data-field]")) refreshChips(e.target);
+});
+
 function eControlFor(key) {
   return eGenCol.querySelector(`[data-field="${key}"]`);
 }
@@ -784,7 +838,7 @@ function renderEnrichGenerated(g, usage) {
   eGenCol.innerHTML = `
     <div class="badge badge-gen">Generated (EN)</div>
     <div class="form">
-      ${GEN_FIELDS.map((f) => fieldMarkup(f, fieldValue(g, f))).join("")}
+      ${GEN_FIELDS.map((f) => fieldMarkup(f, fieldValue(g, f), g)).join("")}
       <div class="form-actions">
         <button class="copy" type="button" data-copy-all="1">Copy all fields</button>
         <span class="hint">Edit any field before copying — changes stay in the browser.</span>
