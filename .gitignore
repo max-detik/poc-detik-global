@@ -3,6 +3,6 @@ venv/
 .venv/
 __pycache__/
 *.pyc
-input/
+temp_input/
 output/
 .DS_Store

@@ -1,0 +1,402 @@
+level 1,level 2,Leaf,Deskripsi
+Agama,Berita Agama,Berita Agama,"Berita/artikel religi umum (excl. syariah dan fashion syar'i)
+Berita tentang agama selain Islam"
+Agama,Ibadah,Doa dan Hadist,Doa & hadist exclude doa haji & umrah
+Agama,Ibadah,Haji dan Umrah,Berita tentang haji dan umrah umum
+Agama,Kisah,Kisah Religi,Kisah-kisah dalam Islam
+Ekonomi,Berita Ekonomi,Ekonomi Lainnya,Berita/informasi terkait ekonomi yang tidak masuk kategori ekonomi manapun
+Ekonomi,Investasi,Investasi Berisiko Rendah,"Berita/informasi serta tips terkait investasi:
+Emas
+Logam lainnya 
+Obligasi
+Reksadana"
+Ekonomi,Investasi,Investasi Berisiko Tinggi,"Berita/informasi serta tips terkait investasi:
+pasar saham
+crypto
+trading
+investasi high-risk"
+Ekonomi,Makro Ekonomi,Ekonomi Global,"Valas
+Perdagangan Internasional
+Ekonomi Negara selain Indonesia
+Kebijakan ekonomi global 
+Analisis pasar internasional"
+Ekonomi,Makro Ekonomi,Energi,"Berita/informasi terkait
+Energi dan SDA
+Ekonomi hijau
+Renewable energy
+Kebijakan energi
+inovasi energi hijau"
+Ekonomi,Makro Ekonomi,Industri,"Berita spesifik industri tertentu
+Perkembangan teknologi industri dan inovasi sektor industri (contoh: agritech)."
+Ekonomi,Makro Ekonomi,Moneter,"Berita/informasi terkait:
+Berita moneter
+Inflasi
+Kebijakan fiskal (pajak)
+Suku bunga & kebijakan suku bunga
+Kebijakan bank sentral dan pengaruhnya terhadap ekonomi
+cadangan devisa
+Likuiditas pasar"
+Ekonomi,Makro Ekonomi,Pertumbuhan Ekonomi,"Berita/informasi terkait:
+PDB
+Pertumbuhan ekonomi
+Pengangguran
+Isu pertumbuhan ekonomi
+Ekspor impor
+Labor/buruh
+UMR
+Analisis pertumbuhan sektoral"
+Ekonomi,Mikro Ekonomi,Bisnis dan Wirausaha,"Berita/informasi terkait:
+Start-up dan Kewirausahaan
+Strategi Bisnis
+UKM
+Ide bisnis
+Panduan bisnis
+Crowdfunding
+Inkubator bisnis"
+Ekonomi,Mikro Ekonomi,Korporasi,"Berita/informasi terkait:
+perusahaan korporasi
+Akuisisi dan merger
+berita/informasi BUMN
+strategi korporasi 
+kebijakan perusahaan besar"
+Ekonomi,Mikro Ekonomi,Perencanaan Keuangan (personal),"Berita/informasi terkait: 
+Finansial pribadi beserta tipsnya 
+Asuransi, 
+Manajemen keuangan pribadi
+Strategi tabungan 
+exclude KPR."
+Ekonomi,Makro Ekonomi,Ekonomi Digital,"Berita/informasi terkait:
+Fintech 
+E-wallet
+Bank digital
+Berita judol
+Pinjol
+Inovasi fintech 
+Regulasi fintech."
+Ekonomi,Makro Ekonomi,Dunia Karir,"Berita/informasi terkait
+Loker + internship
+Informasi terkait dunia kerja
+Tips karir
+Perkembangan karir"
+Ekonomi,Makro Ekonomi,Infrastruktur,"Berita/informasi mengenai: 
+Pembangunan infrastruktur 
+Ekonomi infrastruktur
+Proyek infrastruktur besar
+Kebijakan pembangunan"
+Ekonomi,Makro Ekonomi,Ekonomi Syariah,"Berita/informasi terkait:
+Ekonomi syariah
+Panduan serta prinsip ekonomi syariah"
+Food,Food Experience,Menu dan Resep,"Berita untuk masak memasak dan tipsnya
+Selain makanan anak
+Selain makanan sehat
+Cara bikin makanan"
+Food,Berita Food,Berita Kuliner,"Berita kuliner umum lainnya
+Review makanan secara umum"
+Food,Food Experience,Tempat Makan,"Berita review dan rekomendasi tempat makanan
+Restoran
+Cafe
+dan lainnya yang berhubungan dengan tempat makan"
+Gaya Hidup,Mode dan Kecantikan,Fashion,"Berita/informasi mengenai fashion umum selain syar'i seperti:
+News fashion
+Trend fashion
+Tips fashion 
+Fashion show"
+Gaya Hidup,Mode dan Kecantikan,Fashion Syar'i,"Berita/informasi mengenai fashion syar'i seperti:
+Hijab
+News fashion syar'i
+Trend fashion syar'i
+Tips fashion syar'i
+Fashion show syar'i"
+Gaya Hidup,Tren Belanja,Sale and Shop,"Berita/informasi terkait:
+Promo dan shopping 
+Goods only
+(Exclude promo travel)"
+Gaya Hidup,Mode dan Kecantikan,Kecantikan,"berita/informasi terkait:
+Kecantikan
+Makeup
+Skincare
+Face and body care"
+Gaya Hidup,Hubungan,Relationship,"Berita/informasi terkait
+Tips dan hubungan pasangan dan keluarga (exclude ramalan, psikologis, dst)"
+Gaya Hidup,Hubungan,Wedding,"Berita/informasi terkait:
+Acara pernikahan dan rangkaiannya (vendor, prewedding, acara sakral, Resepsi, akad nikah, dst),
+Wedding tips,
+Wedding exhibition"
+Gaya Hidup,Hubungan,Ramalan,"Berita/informasi terkait:
+Zodiak
+Ramalam asmara
+Ramalam keuangan
+Tarot"
+Gaya Hidup,Pengalaman Hidup,Kisah Inspiratif,"Kisah inspiratif tentang:
+Pendidikan 
+Wirausaha
+Kesehatan
+Kisah nyata
+(exclude kisah religi)"
+Kesehatan,Kesehatan Dewasa,Kesehatan,"Berita/informasi terkait:
+Diet 
+Kesehatan pada makanan
+Makan sehat untuk spesifik penyakit
+Tips makanan sehat"
+Kesehatan,Kesehatan Dewasa,Kebugaran,"Berita/informasi terkait: 
+Kesehatan kebugaran 
+Olahraga selain diet"
+Kesehatan,Parenting,Kesehatan Anak,Berita/informasi terkait kesehatan anak (berumur >2 tahun s/d 12 tahun)
+Kesehatan,Parenting,Kesehatan Bayi,Berita/informasi terkait kesehatan bayi (berumur <2 tahun )
+Kesehatan,Parenting,Parenting,"Berita/informasi terkait:
+Perawatan anak
+Makanan anak
+Pendidikan anak
+Tips parenting
+Perkembangan anak"
+Kesehatan,Parenting,Kehamilan,"Berita/informasi terkait:
+Kehamilan
+Kesehatan kehamilan
+Makanan kehamilan
+Program kehamilan
+Kesehatan program kehamilan
+Makanan program kehamilan"
+Kesehatan,Kesehatan Dewasa,Kesehatan Seksual,Berita/informasi terkait kesehatan seksual
+Kesehatan,Kesehatan Mental,Psikologi,"Berita/informasi terkait:
+Psikologi
+Mental health"
+Media dan Hiburan,Film dan Serial,Acara Tv,"All about acara TV baik western atau lokal
+ex. 
+Indonesian Idol
+Akademi Dangdut
+On the spot"
+Media dan Hiburan,Film dan Serial,Anime dan Manga,"All about Japan Pop Culture:
+Anime
+Manga
+J-pop
+Idol Grup Japan
+Komunitas Jepang"
+Media dan Hiburan,Film dan Serial,Drama Korea dan Tv Show,Berita/informasi tentang drama korea & Korean TV show
+Media dan Hiburan,Film dan Serial,Film,"All about movie:
+Lokal
+Barat
+Korea
+Review film
+Lainnya"
+Media dan Hiburan,Film dan Serial,Serial,"Series barat dan lainnya selain Drakor
+Review series
+Series dari OTT"
+Media dan Hiburan,Hiburan Lainnya,Hiburan Lainnya,Berita Entertainment lainnya yang tidak termasuk kategori entertainment manapun.
+Media dan Hiburan,Musik,Musik Lainnya,"Berita musik selain 
+lokal
+barat 
+Korea"
+Media dan Hiburan,Musik,Musik Barat,"Berita musik 
+musisi barat
+konser musik barat"
+Media dan Hiburan,Musik,Musik K-pop,Berita musik dan musisi Korea
+Media dan Hiburan,Musik,Musik Lokal,"Berita musik 
+musisi lokal
+konser musik lokal"
+Media dan Hiburan,Sastra dan Seni,Buku dan Karya Tulis,"Buku
+Karya tulis"
+Media dan Hiburan,Sastra dan Seni,Seni dan Budaya,"Informasi terkait kesenian dan kebudayaan:
+Seni rupa
+Exhibition
+Lukisan
+Seni teater
+Sejarah
+Budaya
+Batik
+dll"
+Media dan Hiburan,Selebriti,Selebriti Lainnya,"All about Selebriti selain lokal, barat, dan Korea:
+Berita gosip
+day-to-day artis
+yang tidak ada hubungannya dengan profesionalnya"
+Media dan Hiburan,Selebriti,Selebriti Barat,"All about Selebriti barat:
+Berita gosip
+day-to-day artis
+yang tidak ada hubungannya dengan profesionalnya"
+Media dan Hiburan,Selebriti,Selebriti Korea,"All about Selebriti Korea:
+Berita gosip
+day-to-day artis
+yang tidak ada hubungannya dengan profesionalnya"
+Media dan Hiburan,Selebriti,Selebriti Lokal,"all about Selebriti lokal:
+Berita gosip
+day-to-day artis
+yang tidak ada hubungannya dengan profesionalnya"
+News,Berita Internasional Lainnya,Berita Internasional Lainnya,"Berita internasional umum (excl. musik/konser, kpop, travel internasional, hukum & politik internasional)
+Berita yang tidak berhubungan dengan politik dan review
+Merujuk ke lifestyle nya
+contoh: mengenal sosok pricess Diana"
+News,Ekosistem,Lingkungan,"Berita lingkungan (excl. ekonomi hijau)
+Weather forecast (BMKG)
+Pengelolaan sampah
+Kondisi air quality index
+Kebijakan lingkungan"
+News,Hukum dan Kriminal,Hukum,"Berita mengenai hukum dan peradilan (excl. berita kriminal, korupsi dan politik)
+hukum pidana, perdata, tata negara, HAM, hukum internasional, hukum bisnis, hukum ketenagakerjaan,dst"
+News,Hukum dan Kriminal,Korupsi,"Berita/informasi terkait:
+Korupsi
+KKN"
+News,Hukum dan Kriminal,Kriminal,"Berita/informasi terkait:
+kriminal umum sebelum proses hukum, 
+Perampokan, 
+Pembunuhan (ditemukan mayat), 
+Begal, 
+Tawuran, 
+Narkoba, 
+Terorisme"
+News,Mobilitas,Lalu Lintas dan Transportasi,"Berita/informasi terkait:
+Lalu lintas
+Kecelakaannya
+Kemacetan
+harga tarif tol
+(pesawat, kereta, kapal laut ) (excl. transportasi travel dan infrastrukturnya)
+contoh: kebakaran kapal, tenggelamnya kapal selam, lion air telat
+Tarif transportasi (harga naik bis, kapal, pesawat exclude travel, dst)"
+News,Musibah dan Bencana Alam,Bencana Alam,"Berita bencana alam (banjir, longsor, hujan badai/tornado, tsunami)
+fenomena alam yang bersifat destruktif"
+News,Musibah dan Bencana Alam,Musibah,"Berita kecelakaan lainnya non alam & non lalu lintas
+Contoh: Kebakaran Mampang
+Human error (Besi jatuh ke jalur MRT)"
+News,News Lainnya,Ragam Berita,Berita/informasi terkait kejadian terbaru yang tidak termasuk kategori manapun
+News,Politik,Politik Internasional,"Berita/informasi terkait:
+Diplomasi
+Organisasi Internasional
+Konflik
+Perang antar negara
+NGO (non government organization e.g. WHO, UNHCR, IMF, World Bank, dan lain-lain)
+Kerjasama politik internasional 
+Perjanjian bilateral/multilateral"
+News,Politik,Politik Nasional,"Berita/informasi terkait:
+Pemilu (presiden, DPR, MPR)
+Pemerintah Pusat seperti Presiden, DPR, MPR 
+Partai Politik
+Menteri
+Kebijakan Publik atau regulasi yang sedang diusulkan/diterapkan seperti kebijakan sosial, ekonomi, lingkungan
+Pemilihan Daerah
+Pemerintahan Daerah (Gubernur, Bupati, Kabupaten, kota, DPD, DPRD)
+Isu Lokal
+Kebijakan Daerah
+Perkembangan daerah
+Isu spesifik daerah"
+Olahraga,Balapan,Balapan Mobil,"Berita/informasi terkait:
+Formula 1, 2, 3, dan balapan mobil lainnya"
+Olahraga,Balapan,Balapan Motor,"Berita/informasi terkait:
+MotoGP
+WSBK 
+Balapan motor lain"
+Olahraga,Basket,Basket,Berita/informasi terkait basket
+Olahraga,Olahraga Lainnya,Olahraga Lainnya,"Berita olahraga selain:
+Sepakbola
+Basket
+Balapan
+Badminton
+Tenis
+Tenis meja
+Seni bela diri (tinju, MMA, UFC)"
+Olahraga,Raket,Badminton,Berita informasi terkait badminton
+Olahraga,Raket,Raket Lainnya,"Berita/informasi terkait:
+Informasi olahraga dengan raket selain badminton:
+tenis
+tenis meja"
+Olahraga,Seni Bela Diri,Seni Bela Diri,"Berita/informasi terkait:
+Tinju
+MMA
+UFC"
+Olahraga,Sepakbola,Sepakbola Lainnya,"Berita sepakbola lainnya yang tidak terdapat di kategori Liga Indonesia, Inggris, Italia, Jerman, Spanyol"
+Olahraga,Sepakbola,Liga Champion Eropa,"Berita/informasi terkait:
+Informasi tentang kompetisi liga champions klub
+Include europa league
+Include uefa confederation cup"
+Olahraga,Sepakbola,Liga Indonesia,"Berita/informasi terkait Sepakbola Indonesia seperti:
+Liga 1
+Liga 2
+dst"
+Olahraga,Sepakbola,Liga Inggris,Berita/informasi terkait English Premier League (EPL) dan turunannnya
+Olahraga,Sepakbola,Liga Italia,Berita/informasi terkait Serie A dan turunannya
+Olahraga,Sepakbola,Liga Jerman,Berita/informasi terkait Bundesliga dan turunannya
+Olahraga,Sepakbola,Liga Spanyol,Berita/informasi terkait La liga dan turunannya
+Olahraga,Sepakbola,Sepakbola Antarnegara,"Berita/informasi terkait sepakbola antar negara seperti:
+Piala dunia
+Euro
+AFF
+AFC
+Copa America"
+Otomotif,Mobil,Mobil Listrik,Berita/informasi terkait EV mobil
+Otomotif,Motor,Motor Listrik,Berita/informasi terkait EV motor
+Otomotif,Tips Otomotif,Tips Otomotif,Berita/informasi terkait tips berkendara
+Otomotif,Mobil,Otomotif Mobil Lainnya,"Berita/informasi terkait modif kendaraan mobil
+Berita/informasi terkait Mobil secara umum
+Berita/informasi terkait event otomotif mobil"
+Otomotif,Motor,Otomotif Motor Lainnya,"Berita/informasi terkait Motor secara umum
+Berita/informasi terkait modif kendaraan motor
+Berita/informasi terkait event otomotif motor"
+Pendidikan,Ilmu Pengetahuan,Sains,"Berita/informasi terkait Sains seperti:
+Fisika
+Biologi
+Astronomi
+Geologi
+Funfact sains
+Trivia 
+Konten trivial
+Asah otak seperti teka-teki, fakta menarik, kuis, dan lain-lain"
+Pendidikan,Sekolah,Pendidikan,"Berita/informasi terkait pendidikan yang mencangkup:
+Pendidikan perguruan tinggi seperti Diploma, Sarjana, Master, Doktoral
+Pendidikan menengah seperti informasi tentang SMA/SMP
+Pendidikan menengah seperti informasi tentang SD
+Tips pendidikan 
+Beasiswa pendidikan"
+Properti,Arsitektur dan Interior,Arsitektur dan Interior,"Berita/informasi terkait
+Desain arsitektur dan interior
+Tren desain arsitektur
+Inovasi arsitektur"
+Properti,Kpr,Kpr,"Berita/informasi terkait
+Perkembangan KPR
+Panduan serta tips mengajukan KPR"
+Properti,Properti,Properti,"Berita/informasi terkait: 
+Tips dan panduan properti
+Renovasi properti
+Pemeliharaan properti
+Berita tentang review properti
+Tren properti
+Perkembangan pasar properti
+List properti"
+Teknologi,Hardware,Gadget Lainnya,"Berita gadget lain (smartwatch, VR, AR, dll)"
+Teknologi,Hardware,Laptop,Berita gadget Laptop & PC
+Teknologi,Hardware,Smartphone,Berita gadget HP
+Teknologi,Game,E-sport,"Berita/informasi terkait:
+Berita kompetisi game e-sport"
+Teknologi,Game,Game,"Berita/informasi terkait:
+Game
+Video game
+Console
+Pc
+Tips games & walkthrough
+Mobile game
+Selain e-sport"
+Teknologi,Hardware,Fotografi,"Berita/informasi terkait: 
+Fotografi di luar kamera
+Kegiatan terkait fotografi"
+Teknologi,Internet dan Provider,Internet dan Provider,"berita/informasi tentang mengenai provider internet, berita/informasi internet secara umum"
+Teknologi,Software,Artificial Intelligence,Berita/informasi terkait Artikel mengenai (AI)
+Teknologi,Software,Cyber Security,"Berita/informasi terkait:
+Malware 
+Cyber security"
+Teknologi,Software,Perusahaan Teknologi dan Software,"Berita/informasi terkait:
+Tech company dari sisi teknologinya
+Tips teknologi 
+Tips menggunakan whatsapp 
+Tips menggunakan aplikasi"
+Teknologi,Teknologi Lainnya,Teknologi Lainnya,Berita/informasi lainnya terkait teknologi yang tidak masuk kategori teknologi lainnya.
+Travel,Tujuan Wisata,Tujuan Domestik,"Berita review dan promo destinasi lokal, 
+Transportasi travel domestik,
+Itinerary domestik
+Review hotel - tergantung lokasi hotel
+Travel agent domestik
+Promo tujuan domestik"
+Travel,Tujuan Wisata,Tujuan Internasional,"Berita review dan promo destinasi internasional
+Transportasi travel internasional
+Itinerary internasional
+Tata cara apply visa
+Review hotel - tergantung lokasi hotel
+Travel agent internasional
+Promo tujuan internasional"
+Travel,Wisata Lainnya,Travel Lainnya,"berita travel umum (selain yang ada di tujuan domestik & internasional, dan tips travel)
+budaya"
