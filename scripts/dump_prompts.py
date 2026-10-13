@@ -24,6 +24,7 @@ def rendered_prompts():
         # No placeholders: the article prompt is sent exactly as stored.
         "news_multi": load_prompt("news_multi"),
         "keywords_category": render_system_instruction(),
+        "keywords_category_id": load_prompt("keywords_category_id"),
     }
 
 

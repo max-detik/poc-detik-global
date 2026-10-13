@@ -81,8 +81,6 @@ def _detail_section(sample, generated, result):
         "",
         f"**Tags:** {', '.join(generated.get('tags') or [])}",
         "",
-        f"**Keywords:** {generated.get('keywordauto', '')}",
-        "",
         f"**Category:** {generated.get('categoryauto', '')}",
         "",
         "### Enrichment",

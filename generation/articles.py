@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+from generation.keywords_category import generate_keywords_category, translate_title_keywords
+from generation.llm import sum_usage
 from generation.news import MAX_SOURCE_ARTICLES, generate_news_multi
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +32,6 @@ def build_news_input(article):
         "content": article.get("content", ""),
         "resume": article.get("resume", ""),
         "tags": tags,
-        "keywordauto": article.get("keywordauto", ""),
         "categoryauto": article.get("categoryauto", ""),
         "image_cover_image_text": image_cover.get("text", ""),
         "image_cover_alt_image": image_cover.get("alt_image", ""),
@@ -53,6 +54,26 @@ def build_news_inputs(articles):
     return [build_news_input(article) for article in articles]
 
 
+def add_keyword_metadata(generated, token_usage):
+    """Add the English and Indonesian keywords, and the Indonesian title, in place.
+
+    Runs on every generated article, right after the rewrite: the English
+    `keywords_auto`/`keywordauto` come from the generated content
+    (keywords_category.py), then those and the English title are translated into
+    `title_id`/`keywords_auto_id`/`keywordauto_id`. The article keeps its own
+    `categoryauto`. Returns the usage of all three calls added together.
+    """
+    keywords, keywords_usage = generate_keywords_category(generated.get("content", ""))
+    generated["keywords_auto"] = keywords["keywords_auto"]
+    generated["keywordauto"] = keywords["keywordauto"]
+
+    indonesian, indonesian_usage = translate_title_keywords(
+        generated.get("title", ""), generated["keywords_auto"], generated.get("content", "")
+    )
+    generated.update(indonesian)
+    return sum_usage(token_usage, keywords_usage, indonesian_usage)
+
+
 def generate_multi_with_retries(news_items, cost_tracker, attempts=MAX_ATTEMPTS):
     """Generate one article from a group of 1..MAX_SOURCE_ARTICLES source articles.
 
@@ -71,6 +92,7 @@ def generate_multi_with_retries(news_items, cost_tracker, attempts=MAX_ATTEMPTS)
         #     print(f"  attempt {attempt}/{attempts} failed: {e}", file=sys.stderr)
         #     continue
 
+        token_usage = add_keyword_metadata(generated, token_usage)
         cost_tracker["total_cost"] += token_usage.get("cost") or 0.0
         cost_tracker["total_tokens"] += token_usage.get("total_tokens") or 0
         generated["usage"] = token_usage

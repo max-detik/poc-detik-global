@@ -60,13 +60,25 @@ def parse_response(response):
     return response_output, token_usage
 
 
+def sum_usage(*usages):
+    """One token usage dict adding up several calls' usage; cost stays None if none reported it."""
+    total = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost": None}
+    for usage in usages:
+        usage = usage or {}
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            total[key] += usage.get(key) or 0
+        if usage.get("cost") is not None:
+            total["cost"] = (total["cost"] or 0.0) + usage["cost"]
+    return total
+
+
 # ---------- keyword metadata ----------
 
 # Both generators return keywords in the same shape: a scored array plus the flat
 # pipe-joined string the CMS stores. Kept here so news.py and
 # keywords_category.py share it without importing each other.
 KEYWORD_SEPARATOR = "|"
-MIN_KEYWORDS, MAX_KEYWORDS = 5, 10
+MIN_KEYWORDS, MAX_KEYWORDS = 5, 15
 
 
 class KeywordAuto(BaseModel):
@@ -89,13 +101,19 @@ def keywords_field():
     )
 
 
+def normalize_tags(result):
+    """Lowercase and tidy `tags`, since the prompt's casing rule isn't always followed."""
+    if "tags" in result:
+        result["tags"] = [tag.strip().lower() for tag in (result["tags"] or []) if tag.strip()]
+    return result
+
+
 def normalize_keywords(result):
     """Rebuild `keywordauto` from `keywords_auto` so the two can't disagree.
 
     The model is asked for both in the prompt, but the flat string is a pure
-    function of the array, so it is recomputed rather than trusted. Keywords and
-    tags are lowercased here too, since the prompt's casing rule isn't always
-    followed.
+    function of the array, so it is recomputed rather than trusted. Keywords are
+    lowercased here too, for the same reason `tags` are in normalize_tags().
     """
     keywords = [
         keyword for keyword in (result.get("keywords_auto") or [])
@@ -105,6 +123,4 @@ def normalize_keywords(result):
         keyword["keyword"] = keyword["keyword"].strip().lower()
     result["keywords_auto"] = keywords
     result["keywordauto"] = KEYWORD_SEPARATOR.join(k["keyword"] for k in keywords)
-    if "tags" in result:
-        result["tags"] = [tag.strip().lower() for tag in (result["tags"] or []) if tag.strip()]
-    return result
+    return normalize_tags(result)

@@ -11,16 +11,19 @@ schema, different input. The shared OpenRouter plumbing is in llm.py.
 """
 
 import csv
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import Field, create_model
+from pydantic import BaseModel, Field, create_model
 
 from generation.llm import (
+    KEYWORD_SEPARATOR,
     OPENROUTER_MODEL,
     OPENROUTER_REASONING_EFFORT,
     OPENROUTER_TEMPERATURE,
+    KeywordAuto,
     client,
     keywords_field,
     load_prompt,
@@ -209,3 +212,78 @@ def generate_keywords_category(content):
 
     result, usage = parse_response(response)
     return _normalize(result), usage
+
+
+# ---------- Indonesian title + keywords ----------
+
+class IndonesianMetadataSchema(BaseModel):
+    """The response schema for translate_title_keywords().
+
+    No length bounds on `keywords_auto_id`: it mirrors the English array one to
+    one, and the prompt lets a collision drop an entry.
+    """
+
+    title_id: str = Field(..., description="the English news title translated into Indonesian")
+    keywordauto_id: str = Field(..., description="all Indonesian keywords joined with '|', no surrounding spaces")
+    keywords_auto_id: List[KeywordAuto] = Field(
+        ..., description="one Indonesian keyword per English keyword, same order, same scores"
+    )
+
+
+def _normalize_indonesian(result):
+    """Lowercase the Indonesian keywords and rebuild `keywordauto_id` from them."""
+    keywords = [
+        keyword for keyword in (result.get("keywords_auto_id") or [])
+        if (keyword.get("keyword") or "").strip()
+    ]
+    for keyword in keywords:
+        keyword["keyword"] = keyword["keyword"].strip().lower()
+    result["keywords_auto_id"] = keywords
+    result["keywordauto_id"] = KEYWORD_SEPARATOR.join(k["keyword"] for k in keywords)
+    result["title_id"] = (result.get("title_id") or "").strip()
+    return result
+
+
+def translate_title_keywords(title, keywords_auto, content=""):
+    """Translate an English title and its `keywords_auto` into Indonesian.
+
+    `keywords_auto` is the English array generate_keywords_category() returns;
+    each entry is translated one to one, keeping its order and score. `content`
+    is passed only so the model can pick the right sense of an ambiguous term.
+    Returns (result_dict, token_usage) with `title_id`, `keywords_auto_id` and the
+    pipe-joined `keywordauto_id`.
+    """
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("title must not be empty")
+
+    api = client()
+
+    english_keywords = [
+        {"score": k.get("score"), "keyword": k.get("keyword")} for k in (keywords_auto or [])
+    ]
+    prompt_input = f"""
+    Below are an English news article's title, its English keywords (keywords_auto) and its
+    content for context. Output only the Indonesian title and the Indonesian keywords.
+
+    Title: {title}
+
+    keywords_auto: {json.dumps(english_keywords, ensure_ascii=False)}
+
+    Content: {content}"""
+
+    messages = [
+        {"role": "system", "content": load_prompt("keywords_category_id")},
+        {"role": "user", "content": prompt_input},
+    ]
+    response = api.responses.parse(
+        model=OPENROUTER_MODEL,
+        temperature=OPENROUTER_TEMPERATURE,
+        input=messages,
+        text_format=IndonesianMetadataSchema,
+        reasoning=Reasoning(effort=OPENROUTER_REASONING_EFFORT),
+        extra_body={"usage": {"include": True}},
+    )
+
+    result, usage = parse_response(response)
+    return _normalize_indonesian(result), usage
